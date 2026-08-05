@@ -116,5 +116,5 @@ async def run_metric_query(
     user: AnalystDep,
     session: AsyncSession = SessionDep,
 ):
-    """执行指标查询: 返回口径正确的数字 + 可追溯的定义."""
-    return await query_metric(session, metric_id, payload)
+    """执行指标查询: 口径正确的数字 + 动态脱敏 + 审计血缘留痕."""
+    return await query_metric(session, metric_id, payload, actor=user.username, role=user.role)

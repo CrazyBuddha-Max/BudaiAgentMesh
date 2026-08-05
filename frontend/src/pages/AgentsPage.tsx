@@ -12,10 +12,12 @@ import {TextArea} from '@astryxdesign/core/TextArea';
 import {VStack} from '@astryxdesign/core/VStack';
 import {HStack} from '@astryxdesign/core/HStack';
 import {Badge} from '@astryxdesign/core/Badge';
+import {Selector} from '@astryxdesign/core/Selector';
+import {CheckboxList, CheckboxListItem} from '@astryxdesign/core/CheckboxList';
 import {EmptyState} from '@astryxdesign/core/EmptyState';
 import {useToast} from '@astryxdesign/core/Toast';
 import type {AgentEvent, AgentInfo, AgentTask, ToolInfo} from '@/api/types';
-import {Bot, Plus, Play, Trash2, Wrench, ListTree} from 'lucide-react';
+import {Bot, Plus, Play, Trash2, Wrench, ListTree, Star} from 'lucide-react';
 import {useAuthStore} from '@/store/auth';
 
 const EVENT_LABEL: Record<string, {label: string; variant: string}> = {
@@ -39,6 +41,10 @@ export function AgentsPage() {
   const [agentDesc, setAgentDesc] = useState('');
   const [objective, setObjective] = useState('');
   const [runTarget, setRunTarget] = useState<number | null>(null);
+  const [mainAgentId, setMainAgentId] = useState('');
+  const [collaborators, setCollaborators] = useState<string[]>([]);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
 
   const agents = useQuery({queryKey: ['agents'], queryFn: api.listAgents});
   const tools = useQuery({queryKey: ['agent-tools'], queryFn: api.listTools});
@@ -72,9 +78,15 @@ export function AgentsPage() {
   });
 
   const createTask = useMutation({
-    mutationFn: (agentId: number) => api.createTask(agentId, objective, objective.slice(0, 40)),
+    mutationFn: (agentId: number) =>
+      api.createTask(
+        agentId,
+        objective,
+        objective.slice(0, 40),
+        collaborators.map(Number).filter((id) => id !== agentId),
+      ),
     onSuccess: async (task) => {
-      toast({body: `任务已创建 (#${task.id}), 开始执行`});
+      toast({body: `任务已创建 (#${task.id}), 协作团队已集结, 开始执行`});
       setObjective('');
       setRunTarget(task.id);
       qc.invalidateQueries({queryKey: ['agent-tasks']});
@@ -86,11 +98,22 @@ export function AgentsPage() {
   const runTask = useMutation({
     mutationFn: (taskId: number) => api.runTask(taskId),
     onSuccess: () => {
-      toast({body: '任务执行完成'});
+      toast({body: '任务执行完成' });
       qc.invalidateQueries({queryKey: ['agent-tasks']});
     },
     onError: (e) => toast({body: e instanceof Error ? e.message : '执行失败', type: 'error'}),
   });
+
+  const submitFeedback = useMutation({
+    mutationFn: (taskId: number) => api.submitFeedback(taskId, rating, comment || undefined),
+    onSuccess: () => {
+      toast({body: '反馈已提交, 将驱动系统迭代' });
+      setComment('');
+    },
+    onError: (e) => toast({body: e instanceof Error ? e.message : '反馈提交失败', type: 'error'}),
+  });
+
+  const agentNameOf = (id: number) => agents.data?.find((a) => a.id === id)?.name ?? `Agent#${id}`;
 
   const agentColumns = [
     {key: 'name', header: 'Agent', width: proportional(1.4), renderCell: (a: AgentInfo) => (
@@ -201,8 +224,27 @@ export function AgentsPage() {
           <HStack gap={2} vAlign="center">
             <Play size={17} />
             <Text weight="semibold">任务编排控制台</Text>
-            <Text type="supporting"><span className="muted">目标 → 知识检索 → 目录检索 → 数据采样 → 结果组装</span></Text>
+            <Text type="supporting"><span className="muted">目标 → 知识检索 → 目录检索 → 数据采样 → 主控汇总</span></Text>
           </HStack>
+          <div style={{display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12}}>
+            <Selector
+              label="主控 Agent"
+              value={mainAgentId}
+              onChange={(v) => setMainAgentId(v)}
+              options={(agents.data ?? []).map((a) => ({label: `${a.name} (${(a.capabilities ?? []).join('/') || '通用'})`, value: String(a.id)}))}
+              description="负责规划与汇总"
+            />
+            <CheckboxList
+              label="协作 Agent"
+              value={collaborators}
+              onChange={setCollaborators}
+              description="按能力分工: 检索员 / 分析员, 可多选"
+            >
+              {(agents.data ?? []).map((a) => (
+                <CheckboxListItem key={a.id} label={`${a.name} (${(a.capabilities ?? []).join('/') || '通用'})`} value={String(a.id)} />
+              ))}
+            </CheckboxList>
+          </div>
           <HStack gap={2} vAlign="end">
             <TextArea
               label="任务目标"
@@ -216,12 +258,9 @@ export function AgentsPage() {
               label="创建并执行"
               variant="primary"
               icon={<ListTree size={14} />}
-              isDisabled={!canEdit || !objective.trim() || !agents.data?.length}
+              isDisabled={!canEdit || !objective.trim() || !mainAgentId}
               isLoading={createTask.isPending || runTask.isPending}
-              onClick={() => {
-                const agent = agents.data?.[0];
-                if (agent) createTask.mutate(agent.id);
-              }}
+              onClick={() => createTask.mutate(Number(mainAgentId))}
             />
           </HStack>
         </VStack>
@@ -276,6 +315,7 @@ export function AgentsPage() {
                 return (
                   <HStack key={e.id} gap={2} vAlign="start">
                     <Badge label={meta.label} variant={meta.variant as never} />
+                    <Badge label={agentNameOf(e.agent_id)} variant="neutral" />
                     <Text type="supporting" className="mono" style={{flex: 1}}>{summary || '--'}</Text>
                   </HStack>
                 );
@@ -287,6 +327,46 @@ export function AgentsPage() {
               <Card variant="default" style={{padding: 14}}>
                 <Text weight="semibold" style={{marginBottom: 6}}>执行结果</Text>
                 <Text type="body" className="mono" style={{whiteSpace: 'pre-wrap'}}>{selectedTask.result}</Text>
+              </Card>
+            )}
+
+            {/* M3: 反馈闭环 */}
+            {selectedTask.status === 'succeeded' && (
+              <Card variant="default" style={{padding: 14}}>
+                <VStack gap={2}>
+                  <HStack gap={2} vAlign="center">
+                    <Star size={15} className="muted" />
+                    <Text weight="semibold">效果反馈</Text>
+                    <Text type="supporting"><span className="muted">评分将驱动知识修正与检索优化</span></Text>
+                  </HStack>
+                  <HStack gap={1}>
+                    {[1, 2, 3, 4, 5].map((v) => (
+                      <Button
+                        key={v}
+                        label={String(v)}
+                        size="sm"
+                        variant={rating === v ? 'primary' : 'ghost'}
+                        onClick={() => setRating(v)}
+                      />
+                    ))}
+                  </HStack>
+                  <HStack gap={2} vAlign="end">
+                    <TextInput
+                      label="评论 (可选)"
+                      value={comment}
+                      onChange={setComment}
+                      placeholder="结果是否准确? 有哪些改进空间?"
+                      style={{flex: 1}}
+                    />
+                    <Button
+                      label="提交反馈"
+                      variant="primary"
+                      isLoading={submitFeedback.isPending}
+                      isDisabled={!canEdit}
+                      onClick={() => submitFeedback.mutate(selectedTask.id)}
+                    />
+                  </HStack>
+                </VStack>
               </Card>
             )}
           </VStack>

@@ -34,6 +34,7 @@ class AgentTask(Base):
     agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     objective: Mapped[str] = mapped_column(Text)
+    collaborators: Mapped[list] = mapped_column(JSON, default=list)  # 协作 Agent ids (M3)
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending/running/succeeded/failed
     result: Mapped[str | None] = mapped_column(Text, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)

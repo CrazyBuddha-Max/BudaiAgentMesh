@@ -1,6 +1,7 @@
 """CSV 文件连接器: 本地文件即数据源, 适合快速演示与起步."""
 import csv
 import os
+import re
 
 from app.access.connectors import (
     ColumnProfile,
@@ -15,6 +16,22 @@ from app.access.connectors.expr import (
     validate_expr_columns,
 )
 
+# 后端根目录: 用于把相对 file_path 解析为绝对路径 (跨平台兼容)
+BACKEND_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+
+
+def _remap_linux_path(path: str) -> str:
+    """兼容历史数据: 仅在 Windows 下把 WSL 绝对路径 (/mnt/d/xxx) 重映射为盘符路径."""
+    if os.sep != "\\":  # POSIX (WSL/macOS): /mnt/d/... 本就是正确路径
+        return path
+    m = re.match(r"^/mnt/([a-zA-Z])/(.*)$", path)
+    if m:
+        drive, rest = m.group(1), m.group(2)
+        return f"{drive.upper()}:\\{rest.replace('/', os.sep)}"
+    return path
+
 
 @register_connector
 class CsvConnector(SourceContract):
@@ -25,7 +42,10 @@ class CsvConnector(SourceContract):
     @property
     def path(self) -> str:
         path = self.params.get("file_path") or ""
-        return os.path.abspath(os.path.expanduser(path))
+        path = os.path.expanduser(path)
+        if not os.path.isabs(path):
+            path = os.path.join(BACKEND_ROOT, path)
+        return os.path.abspath(_remap_linux_path(path))
 
     async def test_connection(self) -> None:
         if not os.path.exists(self.path):

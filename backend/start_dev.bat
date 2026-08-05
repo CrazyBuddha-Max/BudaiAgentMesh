@@ -47,13 +47,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
-rem ---------- 3. seed demo data ----------
+rem ---------- 3. seed demo data (idempotent) ----------
 echo [3/4] Initializing demo data...
-if not exist "data\budai_mesh.db" (
-  .venv\Scripts\python -m scripts.seed_demo
-) else (
-  echo   Local db exists, skipping seed
-)
+.venv\Scripts\python -m scripts.seed_demo
 
 rem ---------- 4. start ----------
 echo.

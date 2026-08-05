@@ -2,10 +2,13 @@ import {AppShell} from '@astryxdesign/core/AppShell';
 import {SideNav, SideNavItem, SideNavSection} from '@astryxdesign/core/SideNav';
 import {TopNav, TopNavHeading} from '@astryxdesign/core/TopNav';
 import {HStack} from '@astryxdesign/core/HStack';
-import {Badge} from '@astryxdesign/core/Badge';
+import {VStack} from '@astryxdesign/core/VStack';
+import {Avatar} from '@astryxdesign/core/Avatar';
+import {Divider} from '@astryxdesign/core/Divider';
+import {Text} from '@astryxdesign/core/Text';
 import {IconButton} from '@astryxdesign/core/IconButton';
 import {useNavigate, useLocation, Outlet} from 'react-router';
-import {Database, FolderSearch, Shield, Activity, LayoutGrid, LogOut, Calculator, Sun, Moon, Monitor, BookOpen, Bot} from 'lucide-react';
+import {Database, FolderSearch, Shield, Activity, LayoutGrid, LogOut, Calculator, Sun, Moon, Monitor, BookOpen, Bot, Boxes} from 'lucide-react';
 import {useAuthStore} from '@/store/auth';
 import {useThemeStore} from '@/store/theme';
 import {SegmentedControl, SegmentedControlItem} from '@astryxdesign/core/SegmentedControl';
@@ -29,16 +32,37 @@ export function AppChrome() {
   const setThemeMode = useThemeStore((s) => s.setMode);
 
   const roleLabel = user?.role === 'admin' ? '管理员' : user?.role === 'analyst' ? '分析师' : '访客';
+  const currentPage = NAV_ITEMS.find((item) => location.pathname.startsWith(item.path))?.label ?? '数据资产';
 
   const sideNav = (
     <SideNav
-      collapsible
-      resizable
+      header={
+        <VStack gap={0.5} style={{padding: '16px 14px 12px'}}>
+          <Text weight="semibold">{currentPage}</Text>
+          <Text type="supporting"><span className="muted">当前页面</span></Text>
+        </VStack>
+      }
       footer={
-        <HStack gap={2} style={{padding: '8px 12px'}}>
-          <Badge label={user?.username ?? ''} variant="neutral" />
-          <Badge label={roleLabel} variant="info" />
-        </HStack>
+        <VStack gap={2} style={{padding: '10px 12px'}}>
+          <Divider />
+          <HStack gap={2} vAlign="center">
+            <Avatar name={user?.username ?? 'U'} size="sm" />
+            <VStack gap={0.5} style={{flex: 1, minWidth: 0}}>
+              <Text weight="semibold" style={{fontSize: 13}}>{user?.username}</Text>
+              <Text type="supporting" style={{fontSize: 12}}><span className="muted">{roleLabel}</span></Text>
+            </VStack>
+            <IconButton
+              icon={<LogOut size={15} />}
+              label="退出登录"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                logout();
+                navigate('/login');
+              }}
+            />
+          </HStack>
+        </VStack>
       }
     >
       <SideNavSection title="平台">
@@ -72,7 +96,28 @@ export function AppChrome() {
 
   const topNav = (
     <TopNav
-      heading={<TopNavHeading heading="BudaiAgentMesh" headingHref="/dashboard" />}
+      heading={
+        <TopNavHeading
+          logo={
+            <span
+              style={{
+                width: 26,
+                height: 26,
+                borderRadius: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'rgba(47, 109, 184, 0.14)',
+                color: '#2f6db8',
+              }}
+            >
+              <Boxes size={15} />
+            </span>
+          }
+          heading="BudaiAgentMesh"
+          headingHref="/dashboard"
+        />
+      }
       endContent={
         <HStack gap={2}>
           <SegmentedControl label="主题模式" value={themeMode} onChange={(v) => setThemeMode(v as 'system' | 'light' | 'dark')} size="sm">

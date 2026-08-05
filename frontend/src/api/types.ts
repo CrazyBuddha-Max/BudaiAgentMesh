@@ -179,6 +179,7 @@ export interface ToolInfo {
 
 export interface AgentEvent {
   id: number;
+  agent_id: number;
   event_type: string;
   payload: Record<string, unknown> | null;
   created_at: string;
@@ -189,10 +190,67 @@ export interface AgentTask {
   agent_id: number;
   title: string | null;
   objective: string;
+  collaborators: number[];
   status: 'pending' | 'running' | 'succeeded' | 'failed';
   result: string | null;
   error: string | null;
   created_at: string;
   finished_at: string | null;
   events: AgentEvent[];
+}
+
+// ---------- M3: 安全治理 ----------
+
+export interface AuditLogEntry {
+  id: number;
+  actor: string;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  detail: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface LineageNode {
+  id: string;
+  type: string;
+  kind: 'source' | 'consumer';
+  label: string;
+}
+
+export interface LineageEdge {
+  from: string;
+  to: string;
+  action: string;
+}
+
+export interface LineageGraph {
+  nodes: LineageNode[];
+  edges: LineageEdge[];
+}
+
+export interface MaskingPolicy {
+  sensitive_type: string;
+  label: string;
+  patterns: string[];
+  example: string;
+  mask_roles: string[];
+}
+
+// ---------- M3: 反馈闭环 ----------
+
+export interface TaskFeedback {
+  id: number;
+  task_id: number;
+  agent_id: number;
+  rating: number;
+  comment: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface FeedbackStats {
+  total: number;
+  avg_rating: number;
+  by_rating: Record<string, number>;
 }

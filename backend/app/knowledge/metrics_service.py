@@ -133,8 +133,16 @@ async def to_out(session: AsyncSession, metric: MetricDefinition) -> MetricOut:
 
 
 async def query_metric(
-    session: AsyncSession, metric_id: int, request: MetricQueryRequest
+    session: AsyncSession,
+    metric_id: int,
+    request: MetricQueryRequest,
+    actor: str | None = None,
+    role: str | None = None,
 ) -> MetricQueryResult:
+    from app.security.audit import record_audit
+    from app.security.lineage import record_lineage
+    from app.security.masking import apply_masking, detect_sensitive_columns
+
     metric = await get_metric(session, metric_id)
     table = await get_table(session, metric.table_id)
     source = await get_source(session, table.source_id)
@@ -160,6 +168,17 @@ async def query_metric(
     finally:
         await connector.close()
     duration_ms = int((time.monotonic() - started) * 1000)
+
+    # 维度值脱敏 (如按 customer_name 下钻时, viewer/analyst 看到掩码)
+    if request.group_by:
+        sensitive = detect_sensitive_columns(request.group_by)
+        rows = apply_masking(rows, sensitive, role or "viewer")
+
+    await record_audit(
+        actor or "system", "metric.query", "metric", metric.id,
+        {"metric": metric.name, "table": f"{table.schema_name}.{table.table_name}", "group_by": request.group_by},
+    )
+    await record_lineage("table", table.id, "metric", metric.id, action="aggregated_by")
 
     metric_out = await to_out(session, metric)
     return MetricQueryResult(

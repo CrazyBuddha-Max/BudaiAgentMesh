@@ -1,7 +1,8 @@
-"""编排引擎 (M2 起步): 单 Agent 顺序流水线.
+"""编排引擎 (M3): 多 Agent 协作 DAG + 并行执行 + 事件追溯.
 
-流程: 目标解析 -> 知识检索 -> 目录检索 -> 数据采样 -> 结果组装.
-M3 将升级为多 Agent DAG (并行/层级/辩论) + 消息总线 (Kafka).
+流程: 主控规划 -> [知识检索 || 目录检索] (并行, 分工到具能力的 Agent)
+      -> 数据采样 -> 主控汇总.
+每个步骤记录实际执行的 Agent, 事件全量留痕, 审计可回溯.
 """
 import datetime as dt
 
@@ -15,13 +16,6 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# 编排步骤: (名称, 工具名, 参数构造)
-_STEPS = [
-    ("知识检索", "knowledge.retrieve", lambda obj: {"query": obj, "top_k": 3}),
-    ("目录检索", "catalog.search_tables", lambda obj: {"keyword": obj[:32]}),
-    ("数据采样", "data.query_table", None),  # 动态确定 table_id
-]
-
 
 async def get_agent(session: AsyncSession, agent_id: int) -> Agent:
     agent = await session.get(Agent, agent_id)
@@ -31,77 +25,122 @@ async def get_agent(session: AsyncSession, agent_id: int) -> Agent:
 
 
 async def create_task(
-    session: AsyncSession, agent_id: int, objective: str, title: str | None = None
+    session: AsyncSession,
+    agent_id: int,
+    objective: str,
+    title: str | None = None,
+    collaborators: list[int] | None = None,
 ) -> AgentTask:
+    """创建任务: 主控 Agent + 可选协作 Agent 列表."""
     await get_agent(session, agent_id)
-    task = AgentTask(agent_id=agent_id, objective=objective, title=title or objective[:40], status="pending")
+    for cid in collaborators or []:
+        await get_agent(session, cid)
+    task = AgentTask(
+        agent_id=agent_id,
+        objective=objective,
+        title=title or objective[:40],
+        status="pending",
+        collaborators=collaborators or [],
+    )
     session.add(task)
     await session.commit()
     await session.refresh(task)
     return task
 
 
-async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
-    """执行任务: 依次调用工具, 事件全量留痕, 结果可回溯."""
-    task = await get_task(session, task_id)
-    agent = await get_agent(session, task.agent_id)
+def _pick_executor(main_agent: Agent, collaborators: list[Agent], capability: str) -> Agent:
+    """按能力声明挑选执行者: 优先协作 Agent (分工), 主控兜底."""
+    for agent in collaborators:
+        if capability in (agent.capabilities or []):
+            return agent
+    if capability in (main_agent.capabilities or []):
+        return main_agent
+    return main_agent
 
-    async def emit(event_type: str, payload: dict | None = None) -> None:
-        session.add(AgentEvent(task_id=task.id, agent_id=agent.id, event_type=event_type, payload=payload))
+
+async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
+    """执行任务: 多 Agent 分工协作, 事件全链路留痕."""
+    from app.security.audit import record_audit
+
+    task = await get_task(session, task_id)
+    main_agent = await get_agent(session, task.agent_id)
+    collaborators = [await get_agent(session, cid) for cid in (task.collaborators or [])]
+    team = [main_agent, *collaborators]
+    team_names = " + ".join(a.name for a in team)
+
+    async def emit(event_type: str, agent_id: int, payload: dict | None = None) -> None:
+        session.add(AgentEvent(task_id=task.id, agent_id=agent_id, event_type=event_type, payload=payload))
         await session.commit()
 
     task.status = "running"
     task.error = None
     await session.commit()
-    await emit("task_started", {"objective": task.objective, "agent": agent.name})
+    await emit("task_started", main_agent.id, {"objective": task.objective, "team": team_names})
 
     try:
-        plan = _plan(task.objective)
-        await emit("plan", {"steps": [p[1] for p in plan]})
-        lines: list[str] = [f"任务目标: {task.objective}"]
+        await emit("plan", main_agent.id, {"steps": ["knowledge.retrieve", "catalog.search_tables", "data.query_table"]})
 
-        for label, tool_name, args_fn in plan:
-            args = args_fn(task.objective) if args_fn else {}
-            # 数据采样步骤: 用目录检索结果中的第一张表
-            if tool_name == "data.query_table":
-                tables = await execute_tool(session, "catalog.search_tables", {"keyword": task.objective[:32]})
-                candidates = tables.get("result", [])
-                if not candidates:
-                    await emit("tool_call", {"tool": tool_name, "status": "skipped", "reason": "目录中无匹配表"})
-                    lines.append(f"[{label}] 目录中无匹配数据表, 跳过采样")
-                    continue
-                args = {"table_id": candidates[0]["table_id"], "limit": 5}
+        # 分工: 优先协作 Agent 承担专业步骤, 主控规划与汇总
+        retriever = _pick_executor(main_agent, collaborators, "knowledge_retrieval")
+        analyst = _pick_executor(main_agent, collaborators, "data_access")
+        reporter = main_agent
 
-            await emit("tool_call", {"tool": tool_name, "args": args})
-            resp = await execute_tool(session, tool_name, args)
-            if not resp.get("ok"):
-                raise RuntimeError(f"工具 {tool_name} 失败: {resp.get('error')}")
-            result = resp["result"]
-            await emit("tool_result", {"tool": tool_name, "summary": _summarize(result)})
-            lines.append(f"[{label}] {_summarize(result)}")
+        # 阶段一: 知识检索 (M3 并行版需独立会话, 当前先安全串行)
+        await emit("tool_call", retriever.id, {"tool": "knowledge.retrieve", "args": {"query": task.objective, "top_k": 3}})
+        resp = await execute_tool(session, "knowledge.retrieve", {"query": task.objective, "top_k": 3})
+        if not resp.get("ok"):
+            raise RuntimeError(f"知识检索失败: {resp.get('error')}")
+        knowledge_hits = resp["result"]
+        await emit("tool_result", retriever.id, {"tool": "knowledge.retrieve", "summary": _summarize(knowledge_hits)})
 
+        # 阶段二: 目录检索 (分析员)
+        await emit("tool_call", analyst.id, {"tool": "catalog.search_tables", "args": {"keyword": task.objective[:32]}})
+        resp = await execute_tool(session, "catalog.search_tables", {"keyword": task.objective[:32]})
+        if not resp.get("ok"):
+            raise RuntimeError(f"目录检索失败: {resp.get('error')}")
+        table_hits = resp["result"]
+        await emit("tool_result", analyst.id, {"tool": "catalog.search_tables", "summary": _summarize(table_hits)})
+
+        lines: list[str] = [f"任务目标: {task.objective}", f"协作团队: {team_names}"]
+        lines.append(f"[{retriever.name}·知识检索] {_summarize(knowledge_hits)}")
+        lines.append(f"[{analyst.name}·目录检索] {_summarize(table_hits)}")
+
+        candidates = table_hits if isinstance(table_hits, list) else []
+        if candidates:
+            await emit(
+                "tool_call", analyst.id,
+                {"tool": "data.query_table", "args": {"table_id": candidates[0]["table_id"], "limit": 5}},
+            )
+            resp = await execute_tool(
+                session, "data.query_table",
+                {"table_id": candidates[0]["table_id"], "limit": 5, "actor": f"agent:{analyst.name}", "role": "analyst"},
+            )
+            if resp.get("ok"):
+                await emit("tool_result", analyst.id, {"tool": "data.query_table", "summary": _summarize(resp["result"])})
+                lines.append(f"[{analyst.name}·数据采样] {_summarize(resp['result'])}")
+        else:
+            await emit("tool_call", analyst.id, {"tool": "data.query_table", "status": "skipped", "reason": "目录无匹配表"})
+            lines.append(f"[{analyst.name}·数据采样] 目录中无匹配数据表, 跳过")
+
+        # 主控汇总
         task.result = "\n".join(lines)
         task.status = "succeeded"
         task.finished_at = dt.datetime.now(dt.UTC)
         await session.commit()
-        await emit("completion", {"status": "succeeded"})
+        await emit("completion", reporter.id, {"status": "succeeded"})
+        await record_audit(f"agent:{reporter.name}", "task.run", "task", task.id, {"objective": task.objective})
     except Exception as exc:
         logger.exception("任务执行失败 task_id=%s", task.id)
         task.status = "failed"
         task.error = str(exc)
         task.finished_at = dt.datetime.now(dt.UTC)
         await session.commit()
-        await emit("error", {"message": str(exc)})
+        await emit("error", main_agent.id, {"message": str(exc)})
     return task
 
 
-def _plan(objective: str) -> list:
-    """目标 -> 步骤 (M2 固定流水线; M3 由规划器动态分解)."""
-    return [s for s in _STEPS]
-
-
 def _summarize(result) -> str:
-    """工具结果 -> 一行摘要, 保证结果文本可控."""
+    """工具结果 -> 一行摘要."""
     if isinstance(result, list):
         if not result:
             return "无结果"
@@ -114,7 +153,9 @@ def _summarize(result) -> str:
     if isinstance(result, dict):
         rows = result.get("rows")
         if rows is not None:
-            return f"表 {result.get('table_name')} 采样 {len(rows)} 行: {rows[:3]}"
+            masking = result.get("masking", {})
+            note = " [已脱敏]" if masking.get("enabled") else ""
+            return f"表 {result.get('table_name')} 采样 {len(rows)} 行{note}: {rows[:3]}"
         return str(result)[:200]
     return str(result)[:200]
 

@@ -2,20 +2,25 @@ import {useAuthStore} from '@/store/auth';
 import type {
   AgentInfo,
   AgentTask,
+  AuditLogEntry,
   CatalogStats,
   CatalogTable,
   ConnectorInfo,
   CurrentUser,
   DataSource,
   DocDetail,
+  FeedbackStats,
   FilterRule,
   IngestResult,
   KnowledgeDoc,
+  LineageGraph,
   LoginResponse,
+  MaskingPolicy,
   MetricDefinition,
   MetricQueryResult,
   MetricsSnapshot,
   RetrieveHit,
+  TaskFeedback,
   ToolInfo,
 } from './types';
 
@@ -135,13 +140,31 @@ export const api = {
     request<AgentInfo>('/agents', {method: 'POST', body: JSON.stringify(payload)}),
   deleteAgent: (id: number) => request<void>(`/agents/${id}`, {method: 'DELETE'}),
   listTools: () => request<ToolInfo[]>('/agents/tools'),
-  createTask: (agentId: number, objective: string, title?: string) =>
+  createTask: (agentId: number, objective: string, title?: string, collaborators?: number[]) =>
     request<AgentTask>(`/agents/${agentId}/tasks`, {
       method: 'POST',
-      body: JSON.stringify({objective, title}),
+      body: JSON.stringify({objective, title, collaborators: collaborators ?? []}),
     }),
   listTasks: () => request<AgentTask[]>('/agents/tasks'),
   runTask: (taskId: number) => request<AgentTask>(`/agents/tasks/${taskId}/run`, {method: 'POST'}),
+
+  // M3: 安全治理
+  auditLogs: (params: {limit?: number; action?: string} = {}) => {
+    const qs = new URLSearchParams();
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.action) qs.set('action', params.action);
+    return request<AuditLogEntry[]>(`/security/audit-logs?${qs.toString()}`);
+  },
+  lineage: () => request<LineageGraph>('/security/lineage'),
+  maskingPolicies: () => request<MaskingPolicy[]>('/security/masking-policies'),
+
+  // M3: 反馈闭环
+  submitFeedback: (taskId: number, rating: number, comment?: string) =>
+    request<TaskFeedback>(`/feedback/tasks/${taskId}/feedback`, {
+      method: 'POST',
+      body: JSON.stringify({rating, comment: comment || null}),
+    }),
+  feedbackStats: () => request<FeedbackStats>('/feedback/stats'),
 
   // 观测
   metrics: () => request<MetricsSnapshot>('/feedback/metrics'),

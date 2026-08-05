@@ -62,7 +62,7 @@ async def tools(user: CurrentUserDep, session: AsyncSession = SessionDep) -> lis
 async def create_agent_task(
     agent_id: int, payload: TaskCreate, user: AnalystDep, session: AsyncSession = SessionDep
 ):
-    task = await create_task(session, agent_id, payload.objective, payload.title)
+    task = await create_task(session, agent_id, payload.objective, payload.title, payload.collaborators)
     return await get_task(session, task.id)
 
 

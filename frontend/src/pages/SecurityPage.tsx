@@ -1,11 +1,15 @@
+import {useState} from 'react';
+import {useQuery} from '@tanstack/react-query';
+import {api} from '@/api/client';
 import {PageHeader} from '@/components/PageHeader';
-import {Table, proportional} from '@astryxdesign/core/Table';
+import {Table, proportional, pixel} from '@astryxdesign/core/Table';
 import {Card} from '@astryxdesign/core/Card';
 import {Text} from '@astryxdesign/core/Text';
 import {HStack} from '@astryxdesign/core/HStack';
 import {VStack} from '@astryxdesign/core/VStack';
 import {Badge} from '@astryxdesign/core/Badge';
-import {ShieldCheck, ScanSearch} from 'lucide-react';
+import {ShieldCheck, ScanSearch, ScrollText, GitBranch, EyeOff} from 'lucide-react';
+import type {AuditLogEntry, LineageGraph, MaskingPolicy} from '@/api/types';
 
 interface UserRow {
   username: string;
@@ -43,6 +47,32 @@ export function SecurityPage() {
   const cell = (ok: boolean) => (
     <span className={`matrix-cell ${ok ? 'matrix-yes' : 'matrix-no'}`}>{ok ? '有' : '无'}</span>
   );
+
+  // M3: 审计 / 血缘 / 脱敏策略
+  const audit = useQuery({queryKey: ['audit-logs'], queryFn: () => api.auditLogs({limit: 50})});
+  const lineage = useQuery({queryKey: ['lineage'], queryFn: api.lineage});
+  const masking = useQuery({queryKey: ['masking-policies'], queryFn: api.maskingPolicies});
+
+  const auditColumns = [
+    {key: 'created_at', header: '时间', width: pixel(150), renderCell: (l: AuditLogEntry) => (
+      <Text type="supporting" className="mono">{l.created_at.slice(0, 19).replace('T', ' ')}</Text>
+    )},
+    {key: 'actor', header: '操作者', width: proportional(1), renderCell: (l: AuditLogEntry) => (
+      <Text weight="semibold" className="mono">{l.actor}</Text>
+    )},
+    {key: 'action', header: '动作', width: proportional(1.1), renderCell: (l: AuditLogEntry) => (
+      <Badge label={l.action} variant="neutral" />
+    )},
+    {key: 'target', header: '目标', width: proportional(1.2), renderCell: (l: AuditLogEntry) => (
+      <Text className="mono">{l.target_type}{l.target_id ? `:${l.target_id}` : ''}</Text>
+    )},
+    {key: 'detail', header: '详情', width: proportional(2), renderCell: (l: AuditLogEntry) => (
+      <Text type="supporting" className="muted">{JSON.stringify(l.detail ?? {})}</Text>
+    )},
+  ];
+
+  const lineageData: LineageGraph = lineage.data ?? {nodes: [], edges: []};
+  const byId = new Map(lineageData.nodes.map((n) => [n.id, n]));
 
   const columns = [
     {key: 'username', header: '账号', width: proportional(1.2), renderCell: (r: UserRow) => (
@@ -114,6 +144,65 @@ export function SecurityPage() {
           ))}
         </div>
       </div>
+
+      {/* M3: 动态脱敏策略 */}
+      <Card variant="muted" style={{padding: 20}}>
+        <VStack gap={3}>
+          <HStack gap={2} vAlign="center">
+            <EyeOff size={18} />
+            <Text weight="semibold">动态脱敏策略 (M3 已启用)</Text>
+            <Text type="supporting"><span className="muted">viewer/analyst 查询时 PII 自动掩码, admin 可见明文</span></Text>
+          </HStack>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12}}>
+            {(masking.data ?? []).map((p: MaskingPolicy) => (
+              <Card key={p.sensitive_type} variant="default" style={{padding: 14}}>
+                <HStack hAlign="between">
+                  <Text weight="semibold">{p.label}</Text>
+                  <Badge label={p.sensitive_type} variant="info" />
+                </HStack>
+                <Text className="mono" style={{margin: '6px 0', color: '#2f6db8'}}>{p.example}</Text>
+                <Text type="supporting" className="mono muted">{p.patterns.slice(0, 3).join(' | ')}</Text>
+              </Card>
+            ))}
+          </div>
+        </VStack>
+      </Card>
+
+      {/* M3: 审计日志 */}
+      <Card variant="muted" style={{padding: 20}}>
+        <VStack gap={3}>
+          <HStack gap={2} vAlign="center">
+            <ScrollText size={18} />
+            <Text weight="semibold">审计日志 ({audit.data?.length ?? 0})</Text>
+            <Text type="supporting"><span className="muted">全链路操作留痕: 谁 / 何时 / 访问了什么</span></Text>
+          </HStack>
+          <Table data={(audit.data ?? []) as never} columns={auditColumns as never} density="compact" dividers="rows" />
+        </VStack>
+      </Card>
+
+      {/* M3: 数据血缘 */}
+      <Card variant="muted" style={{padding: 20}}>
+        <VStack gap={3}>
+          <HStack gap={2} vAlign="center">
+            <GitBranch size={18} />
+            <Text weight="semibold">数据血缘 ({lineageData.edges.length} 条链路)</Text>
+            <Text type="supporting"><span className="muted">源表 → 指标 → 任务 → 结果, 全链路可追溯</span></Text>
+          </HStack>
+          {lineageData.edges.length === 0 ? (
+            <Text type="supporting"><span className="muted">暂无血缘记录, 执行一次指标查询或 Agent 任务后自动生成</span></Text>
+          ) : (
+            <VStack gap={2}>
+              {lineageData.edges.slice(0, 30).map((e, i) => (
+                <HStack key={i} gap={2} vAlign="center">
+                  <Badge label={byId.get(e.from)?.label ?? e.from} variant={byId.get(e.from)?.kind === 'source' ? 'blue' : 'neutral'} />
+                  <Text type="supporting" className="muted">→ {e.action} →</Text>
+                  <Badge label={byId.get(e.to)?.label ?? e.to} variant={byId.get(e.to)?.kind === 'consumer' ? 'green' : 'neutral'} />
+                </HStack>
+              ))}
+            </VStack>
+          )}
+        </VStack>
+      </Card>
     </div>
   );
 }

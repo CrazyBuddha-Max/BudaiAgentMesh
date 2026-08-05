@@ -38,8 +38,8 @@ def _build_tools(session: AsyncSession) -> list[ToolSpec]:
             for t in tables
         ]
 
-    async def data_query(table_id: int, limit: int = 10) -> dict:
-        return await query_table_rows(session, table_id, limit=limit)
+    async def data_query(table_id: int, limit: int = 10, actor: str | None = None, role: str | None = None) -> dict:
+        return await query_table_rows(session, table_id, limit=limit, actor=actor, role=role)
 
     return [
         ToolSpec(

@@ -131,9 +131,20 @@ async def catalog_stats(session: AsyncSession) -> dict:
 
 
 async def query_table_rows(
-    session: AsyncSession, table_id: int, limit: int = 10
+    session: AsyncSession,
+    table_id: int,
+    limit: int = 10,
+    actor: str | None = None,
+    role: str | None = None,
 ) -> dict:
-    """读取表数据样例 (Agent 数据工具): 经连接器契约执行, 全程受控."""
+    """读取表数据样例 (Agent 数据工具): 经连接器契约执行, 全程受控.
+
+    安全三件套 (M3): 动态脱敏 (按角色) + 审计留痕 + 血缘记录.
+    """
+    from app.security.audit import record_audit
+    from app.security.lineage import record_lineage
+    from app.security.masking import apply_masking, detect_sensitive_columns
+
     table = await get_table(session, table_id)
     source = await get_source(session, table.source_id)
     connector = registry.build(source.source_type, source_params(source))
@@ -141,10 +152,24 @@ async def query_table_rows(
         rows = await connector.sample_rows(table.table_name, limit=limit)
     finally:
         await connector.close()
+
+    # 敏感列识别 + 动态脱敏
+    sensitive = detect_sensitive_columns([c.column_name for c in table.columns])
+    masked_rows = apply_masking(rows, sensitive, role or "viewer")
+    masked_count = sum(1 for c in sensitive if any(c in r for r in rows))
+
+    # 审计 + 血缘
+    await record_audit(
+        actor or "system", "data.sample", "table", table.id,
+        {"table": f"{table.schema_name}.{table.table_name}", "rows": len(rows), "masked": bool(sensitive)},
+    )
+    await record_lineage("table", table.id, "query", f"sample-{table.id}", action="sampled_by")
+
     return {
         "table_id": table.id,
         "table_name": f"{table.schema_name}.{table.table_name}",
         "source": source.name,
         "row_count": table.row_count,
-        "rows": rows,
+        "rows": masked_rows,
+        "masking": {"enabled": bool(sensitive), "masked_columns": masked_count},
     }
