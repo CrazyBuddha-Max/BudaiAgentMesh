@@ -139,6 +139,7 @@ async def query_metric(
     actor: str | None = None,
     role: str | None = None,
 ) -> MetricQueryResult:
+    from app.security.acl import denied_columns
     from app.security.audit import record_audit
     from app.security.lineage import record_lineage
     from app.security.masking import apply_masking, detect_sensitive_columns
@@ -173,6 +174,11 @@ async def query_metric(
     if request.group_by:
         sensitive = detect_sensitive_columns(request.group_by)
         rows = apply_masking(rows, sensitive, role or "viewer")
+        # 列级权限 (M5): 被禁止的维度直接拒绝
+        denied = await denied_columns(session, role or "viewer", table.id)
+        for dim in request.group_by:
+            if dim in denied or "*" in denied:
+                raise BizError(f"角色无权限按 {dim!r} 维度下钻")
 
     await record_audit(
         actor or "system", "metric.query", "metric", metric.id,

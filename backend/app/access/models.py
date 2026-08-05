@@ -27,6 +27,7 @@ class DataSource(Base):
     username: Mapped[str | None] = mapped_column(String(128), nullable=True)
     password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 生命周期保留期 (M5)
 
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending/active/error
     quality_score: Mapped[float] = mapped_column(default=0.0)

@@ -12,6 +12,14 @@ from app.core.exceptions import register_exception_handlers
 from app.core.logging import setup_logging
 from app.feedback.metrics import MetricsMiddleware
 
+# M5: 完整 MCP Server (streamable-http, 供外部 Agent 客户端调用)
+try:
+    from app.agents.mcp_server import mcp
+
+    mcp_app = mcp.http_app()
+except ImportError:  # fastmcp 未安装时优雅降级
+    mcp_app = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,7 +29,11 @@ async def lifespan(app: FastAPI):
 
     if hasattr(bus, "start"):  # 进程内总线启动后台 Worker
         await bus.start()
-    yield
+    if mcp_app is not None:  # MCP 服务端生命周期: 初始化任务组
+        async with mcp_app.router.lifespan_context(mcp_app):
+            yield
+    else:
+        yield
     if hasattr(bus, "stop"):
         await bus.stop()
 
@@ -45,3 +57,6 @@ app.add_middleware(MetricsMiddleware)
 register_exception_handlers(app)
 
 app.include_router(api_router, prefix=settings.api_prefix)
+
+if mcp_app is not None:
+    app.mount("/mcp", mcp_app)

@@ -7,6 +7,7 @@ import type {
   BusStats,
   CatalogStats,
   CatalogTable,
+  ColumnPolicy,
   ConnectorInfo,
   CurrentUser,
   DataSource,
@@ -15,6 +16,7 @@ import type {
   FilterRule,
   IngestResult,
   KnowledgeDoc,
+  LifecycleData,
   LineageGraph,
   LoginResponse,
   MaskingPolicy,
@@ -166,6 +168,16 @@ export const api = {
   },
   lineage: () => request<LineageGraph>('/security/lineage'),
   maskingPolicies: () => request<MaskingPolicy[]>('/security/masking-policies'),
+
+  // M5: 列级权限 / 生命周期
+  columnPolicies: () => request<ColumnPolicy[]>('/security/column-policies'),
+  createColumnPolicy: (role: string, columnName: string, tableId?: number) =>
+    request<ColumnPolicy>('/security/column-policies', {
+      method: 'POST',
+      body: JSON.stringify({role, column_name: columnName, table_id: tableId}),
+    }),
+  deleteColumnPolicy: (id: number) => request<void>(`/security/column-policies/${id}`, {method: 'DELETE'}),
+  lifecycle: () => request<LifecycleData>('/security/lifecycle'),
 
   // M3: 反馈闭环
   submitFeedback: (taskId: number, rating: number, comment?: string) =>

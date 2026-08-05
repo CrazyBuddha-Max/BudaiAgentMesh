@@ -32,6 +32,7 @@ async def init_db() -> None:
     from app.feedback.feedback import TaskFeedback  # noqa: F401  反馈闭环
     from app.knowledge import models as _knowledge_models  # noqa: F401  确保模型已注册
     from app.knowledge.metrics_models import MetricDefinition  # noqa: F401  指标语义层
+    from app.security.acl import ColumnPolicy  # noqa: F401  列级权限
     from app.security.audit import AuditLog  # noqa: F401  审计日志
     from app.security.lineage import LineageEdge  # noqa: F401  数据血缘
 

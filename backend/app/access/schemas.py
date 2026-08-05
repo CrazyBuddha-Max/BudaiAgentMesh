@@ -27,6 +27,7 @@ class SourceUpdate(BaseModel):
     username: str | None = None
     password: str | None = None
     file_path: str | None = None
+    retention_days: int | None = None  # 生命周期保留期 (M5)
 
 
 class SourceOut(BaseModel):
@@ -42,6 +43,7 @@ class SourceOut(BaseModel):
     schema_name: str | None = None
     username: str | None = None
     file_path: str | None = None
+    retention_days: int | None = None  # 生命周期保留期 (M5)
     status: str
     quality_score: float
     last_ingested_at: dt.datetime | None = None

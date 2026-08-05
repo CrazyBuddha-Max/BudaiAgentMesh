@@ -250,6 +250,33 @@ export interface MaskingPolicy {
   mask_roles: string[];
 }
 
+// ---------- M5: 列级权限 / 生命周期 ----------
+
+export interface ColumnPolicy {
+  id: number;
+  role: string;
+  table_id: number | null;
+  column_name: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface LifecycleItem {
+  source_id: number;
+  source_name: string;
+  source_type: string;
+  retention_days: number | null;
+  status: 'no-policy' | 'active' | 'expiring' | 'expired';
+  status_label: string;
+  last_ingested_at: string | null;
+  expires_at: string | null;
+}
+
+export interface LifecycleData {
+  summary: {total: number; by_status: Record<string, number>};
+  items: LifecycleItem[];
+}
+
 // ---------- M3: 反馈闭环 ----------
 
 export interface TaskFeedback {

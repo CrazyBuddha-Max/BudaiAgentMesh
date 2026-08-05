@@ -141,6 +141,7 @@ async def query_table_rows(
 
     安全三件套 (M3): 动态脱敏 (按角色) + 审计留痕 + 血缘记录.
     """
+    from app.security.acl import apply_column_acl, denied_columns
     from app.security.audit import record_audit
     from app.security.lineage import record_lineage
     from app.security.masking import apply_masking, detect_sensitive_columns
@@ -157,6 +158,10 @@ async def query_table_rows(
     sensitive = detect_sensitive_columns([c.column_name for c in table.columns])
     masked_rows = apply_masking(rows, sensitive, role or "viewer")
     masked_count = sum(1 for c in sensitive if any(c in r for r in rows))
+
+    # 列级权限 (M5): 按角色剔除禁止列
+    denied = await denied_columns(session, role or "viewer", table.id)
+    masked_rows = apply_column_acl(masked_rows, denied)
 
     # 审计 + 血缘
     await record_audit(

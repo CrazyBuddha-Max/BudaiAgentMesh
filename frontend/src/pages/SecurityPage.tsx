@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {useQuery} from '@tanstack/react-query';
+import {useMutation, useQuery, useQueryClient} from '@tanstack/react-query';
 import {api} from '@/api/client';
 import {PageHeader} from '@/components/PageHeader';
 import {Table, proportional, pixel} from '@astryxdesign/core/Table';
@@ -8,8 +8,12 @@ import {Text} from '@astryxdesign/core/Text';
 import {HStack} from '@astryxdesign/core/HStack';
 import {VStack} from '@astryxdesign/core/VStack';
 import {Badge} from '@astryxdesign/core/Badge';
-import {ShieldCheck, ScanSearch, ScrollText, GitBranch, EyeOff} from 'lucide-react';
-import type {AuditLogEntry, LineageGraph, MaskingPolicy} from '@/api/types';
+import {Button} from '@astryxdesign/core/Button';
+import {TextInput} from '@astryxdesign/core/TextInput';
+import {Selector} from '@astryxdesign/core/Selector';
+import {useToast} from '@astryxdesign/core/Toast';
+import {ShieldCheck, ScanSearch, ScrollText, GitBranch, EyeOff, ShieldBan, Database as DbIcon} from 'lucide-react';
+import type {AuditLogEntry, ColumnPolicy, LifecycleData, LineageGraph, MaskingPolicy} from '@/api/types';
 
 interface UserRow {
   username: string;
@@ -52,6 +56,34 @@ export function SecurityPage() {
   const audit = useQuery({queryKey: ['audit-logs'], queryFn: () => api.auditLogs({limit: 50})});
   const lineage = useQuery({queryKey: ['lineage'], queryFn: api.lineage});
   const masking = useQuery({queryKey: ['masking-policies'], queryFn: api.maskingPolicies});
+
+  // M5: 列级权限 / 生命周期
+  const qc = useQueryClient();
+  const toast = useToast();
+  const policies = useQuery({queryKey: ['column-policies'], queryFn: api.columnPolicies});
+  const lifecycle = useQuery({queryKey: ['lifecycle'], queryFn: api.lifecycle});
+  const tables = useQuery({queryKey: ['catalog-tables-all'], queryFn: () => api.catalogTables({})});
+  const [polRole, setPolRole] = useState('analyst');
+  const [polTable, setPolTable] = useState('');
+  const [polColumn, setPolColumn] = useState('');
+
+  const addPolicy = useMutation({
+    mutationFn: () => api.createColumnPolicy(polRole, polColumn, polTable ? Number(polTable) : undefined),
+    onSuccess: () => {
+      toast({body: '列权限规则已添加'});
+      setPolColumn('');
+      qc.invalidateQueries({queryKey: ['column-policies']});
+    },
+    onError: (e) => toast({body: e instanceof Error ? e.message : '添加失败', type: 'error'}),
+  });
+
+  const removePolicy = useMutation({
+    mutationFn: (id: number) => api.deleteColumnPolicy(id),
+    onSuccess: () => {
+      toast({body: '规则已删除'});
+      qc.invalidateQueries({queryKey: ['column-policies']});
+    },
+  });
 
   const auditColumns = [
     {key: 'created_at', header: '时间', width: pixel(150), renderCell: (l: AuditLogEntry) => (
@@ -200,6 +232,101 @@ export function SecurityPage() {
                 </HStack>
               ))}
             </VStack>
+          )}
+        </VStack>
+      </Card>
+      {/* M5: 细粒度列级权限 */}
+      <Card variant="muted" style={{padding: 20}}>
+        <VStack gap={3}>
+          <HStack gap={2} vAlign="center">
+            <ShieldBan size={18} />
+            <Text weight="semibold">细粒度列级权限 (M5 已启用)</Text>
+            <Text type="supporting"><span className="muted">按角色禁止访问指定列, 与动态脱敏叠加生效</span></Text>
+          </HStack>
+          <HStack gap={2} vAlign="end" wrap="wrap">
+            <Selector
+              label="角色"
+              value={polRole}
+              onChange={setPolRole}
+              options={[
+                {label: '访客 (viewer)', value: 'viewer'},
+                {label: '分析师 (analyst)', value: 'analyst'},
+                {label: '管理员 (admin)', value: 'admin'},
+              ]}
+            />
+            <Selector
+              label="数据表"
+              value={polTable}
+              onChange={setPolTable}
+              options={[
+                {label: '全部表', value: ''},
+                ...(tables.data ?? []).map((t) => ({
+                  label: `${t.schema_name}.${t.table_name}`,
+                  value: String(t.id),
+                })),
+              ]}
+            />
+            <TextInput
+              label="禁止的列"
+              value={polColumn}
+              onChange={setPolColumn}
+              placeholder="列名, 如 phone; 输入 * 禁止整表"
+              style={{minWidth: 220}}
+            />
+            <Button
+              label="添加规则"
+              variant="primary"
+              isDisabled={!polColumn || !polRole}
+              isLoading={addPolicy.isPending}
+              onClick={() => addPolicy.mutate()}
+            />
+          </HStack>
+          {policies.data && policies.data.length > 0 ? (
+            <VStack gap={2}>
+              {(policies.data as ColumnPolicy[]).map((p) => (
+                <HStack key={p.id} gap={2} vAlign="center">
+                  <Badge label={p.role} variant="info" />
+                  <Badge label={p.table_id ? `表#${p.table_id}` : '全部表'} variant="neutral" />
+                  <Text className="mono">{p.column_name}</Text>
+                  <Button label="删除" size="sm" variant="ghost" onClick={() => removePolicy.mutate(p.id)} />
+                </HStack>
+              ))}
+            </VStack>
+          ) : (
+            <Text type="supporting"><span className="muted">暂无规则, 添加后对应角色的数据访问将自动剔除该列</span></Text>
+          )}
+        </VStack>
+      </Card>
+
+      {/* M5: 数据生命周期 */}
+      <Card variant="muted" style={{padding: 20}}>
+        <VStack gap={3}>
+          <HStack gap={2} vAlign="center">
+            <DbIcon size={18} />
+            <Text weight="semibold">数据生命周期 (M5)</Text>
+            <Text type="supporting"><span className="muted">保留期策略: 自最近采集起算, 临期/到期自动标记</span></Text>
+            <HStack gap={1}>
+              <Badge label={`无策略 ${lifecycle.data?.summary.by_status['no-policy'] ?? 0}`} variant="neutral" />
+              <Badge label={`活跃 ${lifecycle.data?.summary.by_status['active'] ?? 0}`} variant="success" />
+              <Badge label={`临期 ${lifecycle.data?.summary.by_status['expiring'] ?? 0}`} variant="warning" />
+              <Badge label={`过期 ${lifecycle.data?.summary.by_status['expired'] ?? 0}`} variant="error" />
+            </HStack>
+          </HStack>
+          {(lifecycle.data?.items ?? []).length > 0 ? (
+            <VStack gap={2}>
+              {(lifecycle.data as LifecycleData).items.map((item) => (
+                <HStack key={item.source_id} gap={2} vAlign="center">
+                  <Text weight="semibold" style={{minWidth: 140}}>{item.source_name}</Text>
+                  <Badge label={item.status_label} variant={item.status === 'expired' ? 'error' : item.status === 'expiring' ? 'warning' : item.status === 'active' ? 'success' : 'neutral'} />
+                  <Text type="supporting" className="mono muted">
+                    保留期 {item.retention_days ? `${item.retention_days} 天` : '未设置'}
+                    {item.expires_at ? ` · 到期 ${item.expires_at.slice(0, 10)}` : ''}
+                  </Text>
+                </HStack>
+              ))}
+            </VStack>
+          ) : (
+            <Text type="supporting"><span className="muted">暂无数据源, 接入后在此设置保留期</span></Text>
           )}
         </VStack>
       </Card>
