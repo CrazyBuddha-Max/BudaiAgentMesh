@@ -27,6 +27,49 @@ async def agents(user: CurrentUserDep, session: AsyncSession = SessionDep) -> li
     return list(result.scalars().all())
 
 
+# ---------- Agent 模板市场 (M4) ----------
+
+@router.get("/templates")
+async def agent_templates(user: CurrentUserDep) -> list[dict]:
+    """Agent 模板市场: 预置角色模板, 一键创建专业化 Agent (M4)."""
+    from app.agents.templates import templates_out
+
+    return templates_out()
+
+
+@router.post("/from-template", response_model=AgentOut, status_code=201)
+async def create_from_template(
+    payload: dict, user: AnalystDep, session: AsyncSession = SessionDep
+) -> Agent:
+    """从模板创建 Agent: {template_key, name?}."""
+    from app.agents.templates import get_template
+    from app.core.exceptions import BizError
+
+    try:
+        template = get_template(payload["template_key"])
+    except KeyError as exc:
+        raise BizError(f"未知模板: {exc}") from exc
+    agent = Agent(
+        name=payload.get("name") or template.name,
+        description=template.description,
+        capabilities=template.capabilities,
+        tools=[],
+        status="active",
+    )
+    session.add(agent)
+    await session.commit()
+    await session.refresh(agent)
+    return agent
+
+
+@router.get("/bus/stats")
+async def bus_stats(user: CurrentUserDep) -> dict:
+    """事件总线运行状态 (M4): 发布量 / 队列积压 / 类型."""
+    from app.agents.bus import bus
+
+    return bus.stats() if hasattr(bus, "stats") else {"type": "kafka"}
+
+
 @router.post("", response_model=AgentOut, status_code=201)
 async def create_agent(
     payload: AgentCreate, user: AnalystDep, session: AsyncSession = SessionDep

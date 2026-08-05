@@ -171,6 +171,19 @@ export interface AgentInfo {
   created_at: string;
 }
 
+export interface AgentTemplate {
+  key: string;
+  name: string;
+  description: string;
+  capabilities: string[];
+}
+
+export interface BusStats {
+  type: string;
+  published: number;
+  queue_size: number;
+}
+
 export interface ToolInfo {
   name: string;
   description: string;

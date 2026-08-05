@@ -17,7 +17,7 @@ import {CheckboxList, CheckboxListItem} from '@astryxdesign/core/CheckboxList';
 import {EmptyState} from '@astryxdesign/core/EmptyState';
 import {useToast} from '@astryxdesign/core/Toast';
 import type {AgentEvent, AgentInfo, AgentTask, ToolInfo} from '@/api/types';
-import {Bot, Plus, Play, Trash2, Wrench, ListTree, Star} from 'lucide-react';
+import {Bot, Plus, Play, Trash2, Wrench, ListTree, Star, Layers} from 'lucide-react';
 import {useAuthStore} from '@/store/auth';
 
 const EVENT_LABEL: Record<string, {label: string; variant: string}> = {
@@ -49,6 +49,8 @@ export function AgentsPage() {
   const agents = useQuery({queryKey: ['agents'], queryFn: api.listAgents});
   const tools = useQuery({queryKey: ['agent-tools'], queryFn: api.listTools});
   const tasks = useQuery({queryKey: ['agent-tasks'], queryFn: api.listTasks});
+  const templates = useQuery({queryKey: ['agent-templates'], queryFn: api.listTemplates});
+  const bus = useQuery({queryKey: ['agent-bus'], queryFn: api.busStats, refetchInterval: 10_000});
 
   const createAgent = useMutation({
     mutationFn: () =>
@@ -75,6 +77,15 @@ export function AgentsPage() {
       qc.invalidateQueries({queryKey: ['agents']});
       qc.invalidateQueries({queryKey: ['agent-tasks']});
     },
+  });
+
+  const createFromTemplate = useMutation({
+    mutationFn: ({key, name}: {key: string; name?: string}) => api.createFromTemplate(key, name),
+    onSuccess: (a) => {
+      toast({body: `已从模板创建 Agent「${a.name}」`});
+      qc.invalidateQueries({queryKey: ['agents']});
+    },
+    onError: (e) => toast({body: e instanceof Error ? e.message : '创建失败', type: 'error'}),
   });
 
   const createTask = useMutation({
@@ -213,6 +224,44 @@ export function AgentsPage() {
                 <Text type="supporting" className="mono muted">
                   参数: {Object.keys((t.parameters.properties as Record<string, unknown>) ?? {}).join(', ') || '无'}
                 </Text>
+              </Card>
+            ))}
+          </div>
+        </VStack>
+      </Card>
+
+      {/* M4: Agent 模板市场 */}
+      <Card variant="muted" style={{padding: 20}}>
+        <VStack gap={3}>
+          <HStack gap={2} vAlign="center" hAlign="between">
+            <HStack gap={2} vAlign="center">
+              <Layers size={17} />
+              <Text weight="semibold">Agent 模板市场 ({templates.data?.length ?? 0})</Text>
+              <Text type="supporting"><span className="muted">预置角色模板, 一键创建专业化 Agent</span></Text>
+            </HStack>
+            {bus.data && (
+              <Badge label={`事件总线 ${bus.data.type} · 已发布 ${bus.data.published ?? 0}`} variant={bus.data.published ? 'success' : 'neutral'} />
+            )}
+          </HStack>
+          <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12}}>
+            {(templates.data ?? []).map((tpl) => (
+              <Card key={tpl.key} variant="default" style={{padding: 14}}>
+                <HStack gap={2} vAlign="center">
+                  <Bot size={15} className="muted" />
+                  <Text weight="semibold">{tpl.name}</Text>
+                </HStack>
+                <Text type="supporting" style={{margin: '6px 0'}}><span className="muted">{tpl.description}</span></Text>
+                <HStack gap={1} style={{marginBottom: 10}} wrap="wrap">
+                  {tpl.capabilities.map((c) => <Badge key={c} label={c} variant="neutral" />)}
+                </HStack>
+                <Button
+                  label="从模板创建"
+                  size="sm"
+                  variant="secondary"
+                  icon={<Plus size={13} />}
+                  isDisabled={!canEdit || createFromTemplate.isPending}
+                  onClick={() => createFromTemplate.mutate({key: tpl.key})}
+                />
               </Card>
             ))}
           </div>

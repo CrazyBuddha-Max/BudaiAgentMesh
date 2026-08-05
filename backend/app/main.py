@@ -17,7 +17,13 @@ from app.feedback.metrics import MetricsMiddleware
 async def lifespan(app: FastAPI):
     setup_logging()
     await init_db()
+    from app.agents.bus import bus
+
+    if hasattr(bus, "start"):  # 进程内总线启动后台 Worker
+        await bus.start()
     yield
+    if hasattr(bus, "stop"):
+        await bus.stop()
 
 
 app = FastAPI(

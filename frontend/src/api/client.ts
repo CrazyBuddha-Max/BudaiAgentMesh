@@ -1,8 +1,10 @@
 import {useAuthStore} from '@/store/auth';
 import type {
   AgentInfo,
+  AgentTemplate,
   AgentTask,
   AuditLogEntry,
+  BusStats,
   CatalogStats,
   CatalogTable,
   ConnectorInfo,
@@ -140,6 +142,13 @@ export const api = {
     request<AgentInfo>('/agents', {method: 'POST', body: JSON.stringify(payload)}),
   deleteAgent: (id: number) => request<void>(`/agents/${id}`, {method: 'DELETE'}),
   listTools: () => request<ToolInfo[]>('/agents/tools'),
+  listTemplates: () => request<AgentTemplate[]>('/agents/templates'),
+  createFromTemplate: (templateKey: string, name?: string) =>
+    request<AgentInfo>('/agents/from-template', {
+      method: 'POST',
+      body: JSON.stringify({template_key: templateKey, name: name || undefined}),
+    }),
+  busStats: () => request<BusStats>('/agents/bus/stats'),
   createTask: (agentId: number, objective: string, title?: string, collaborators?: number[]) =>
     request<AgentTask>(`/agents/${agentId}/tasks`, {
       method: 'POST',
