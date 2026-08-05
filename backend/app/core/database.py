@@ -26,7 +26,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """建表 (生产环境建议改用 Alembic 迁移)."""
+    """建表 + 轻量迁移 (生产环境建议改用 Alembic)."""
     from app.access import models as _access_models  # noqa: F401  确保模型已注册
     from app.agents import models as _agent_models  # noqa: F401  确保模型已注册
     from app.feedback.feedback import TaskFeedback  # noqa: F401  反馈闭环
@@ -38,3 +38,29 @@ async def init_db() -> None:
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _light_migrations()
+
+
+# 开发环境轻量迁移: 为存量库补齐新版本新增的列 (幂等, 生产环境用 Alembic)
+_ADD_COLUMNS: dict[str, list[tuple[str, str]]] = {
+    "data_sources": [("retention_days", "INTEGER")],  # M5 生命周期
+    "agent_tasks": [("collaborators", "JSON")],  # M4 协作 Agent
+}
+
+
+async def _light_migrations() -> None:
+    """为存量库补齐新版本新增的列 (幂等, 表不存在则跳过)."""
+    from sqlalchemy import inspect, text
+
+    async with engine.begin() as conn:
+        for table, columns in _ADD_COLUMNS.items():
+            try:
+                existing = {
+                    c["name"]
+                    for c in await conn.run_sync(lambda sync, t=table: inspect(sync).get_columns(t))
+                }
+            except Exception:
+                continue  # 表不存在则跳过, 无需告警
+            for column, dtype in columns:
+                if column not in existing:
+                    await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {dtype}"))

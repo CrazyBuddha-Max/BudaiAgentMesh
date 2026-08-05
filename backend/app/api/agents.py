@@ -57,7 +57,11 @@ async def create_from_template(
         status="active",
     )
     session.add(agent)
-    await session.commit()
+    try:
+        await session.commit()
+    except Exception as exc:
+        await session.rollback()
+        raise BizError(f"Agent 名称已存在: {agent.name}", code="AGENT_NAME_TAKEN") from exc
     await session.refresh(agent)
     return agent
 
@@ -82,7 +86,13 @@ async def create_agent(
         status="active",
     )
     session.add(agent)
-    await session.commit()
+    try:
+        await session.commit()
+    except Exception as exc:  # 唯一约束冲突 -> 友好提示
+        await session.rollback()
+        from app.core.exceptions import BizError
+
+        raise BizError(f"Agent 名称已存在: {payload.name}", code="AGENT_NAME_TAKEN") from exc
     await session.refresh(agent)
     return agent
 
