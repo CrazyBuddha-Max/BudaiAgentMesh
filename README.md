@@ -19,11 +19,46 @@
 | ④ | 安全治理层 | IAM (JWT/RBAC) / 脱敏 / 审计 / 血缘 | JWT+RBAC 已实现 |
 | ⑤ | 效果反馈层 | 运行指标 / 质量评估 / 反馈闭环 / Trace | 运行指标已实现 |
 
+## 当前进度 (2025-08)
+
+| 指标 | 数值 |
+| --- | --- |
+| 后端 API 端点 | 34 个 (接入 12 / 知识 9 / 协同 8 / 认证 2 / 观测 1 / 系统 2) |
+| 数据模型表 | 10 张 (数据源/目录表列/采集/知识文档切块/指标/Agent/任务/事件) |
+| 前端页面 | 9 个 (登录/资产/源/目录/知识/指标/协同/安全/观测) |
+| 自动化测试 | 13 项, 全部通过 (接入层 6 / 知识层 6 / 协同层 1) |
+| 代码质量 | ruff 全绿 (E/F/W/I/UP/B/ASYNC/S/RUF/TRY) |
+
+### 分层实现明细
+
+**① 数据统一接入层** (app/access)
+- 连接器市场: PostgreSQL / MySQL / CSV, 统一 `SourceContract` 契约 (发现/采样/聚合/鉴权参数)
+- 采集引擎: Schema 自动发现 + 质量初检 (空值率/区分度/采样值) + 采集任务留痕
+- 元数据目录: 数据源 CRUD / 表列检索 / 目录统计 / 数据样例查询
+
+**② 知识沉淀层** (app/knowledge)
+- RAG 流水线: 文档解析 (txt/md/html/pdf) → 段落+重叠切分 → 向量化 (HashEmbedder 离线兜底 / OpenAI 可插拔) → 余弦语义检索
+- 指标语义层: 指标定义 CRUD + 表达式白名单校验 (expr.py) + 聚合查询/维度下钻/越权拦截
+- 检索接口抽象: M3 迁移 pgvector/Milvus 不动业务代码
+
+**③ 多 Agent 协同层** (app/agents)
+- Agent 注册中心: 身份 / 能力声明 (Capability Manifest) / 状态管理
+- 工具注册中心 (MCP 雏形): `knowledge.retrieve` / `catalog.search_tables` / `data.query_table`, JSON Schema 暴露
+- 任务编排: 目标 → 知识检索 → 目录检索 → 数据采样 → 结果组装, 事件全链路留痕可追溯
+
+**④ 安全治理层** (app/security)
+- JWT 签发校验 + 内置账号 RBAC 三级角色 (viewer/analyst/admin)
+- 接口级权限门槛 + 指标维度越权拦截 + SQL 标识符白名单防注入
+- 连接器口令 Fernet 加密存储, 绝不回显
+
+**⑤ 效果反馈层** (app/feedback)
+- 运行指标: 请求量 / 平均时延 / P95 / 错误率 / 状态码分布 (滑动窗口)
+
 ## 技术栈
 
-- **后端**: Python 3.12 · FastAPI · SQLAlchemy 2.0 (async) · PostgreSQL/SQLite · Fernet 口令加密 · JWT
-- **前端**: React 19 · TypeScript · Vite · @astryxdesign/core · @astryxdesign/theme-neutral
-- **部署**: Docker Compose
+- **后端**: Python 3.11+/3.12 · FastAPI · SQLAlchemy 2.0 (async) · PostgreSQL/SQLite · Fernet 口令加密 · JWT · PyMuPDF
+- **前端**: React 19 · TypeScript · Vite · @astryxdesign/core · @astryxdesign/theme-neutral · ECharts · TanStack Query
+- **部署**: Docker Compose (postgres + backend + frontend)
 
 ## 快速开始 (Windows, 推荐一键脚本)
 
@@ -36,9 +71,9 @@ start_all.bat
 ```
 
 脚本会自动: 定位 Python -> 创建 Windows venv -> 安装依赖 -> 生成演示数据 -> 启动前后端。
+批处理文件为纯 ASCII 编写, 兼容任意 Windows 代码页。
 
-> 注意: 若此前在 WSL 中创建过 `.venv` (Linux 版), Windows 脚本会自动重建为 Windows 版。
-> 需要 Node.js (npm) 已安装并加入 PATH。
+> 需要 Python 3.12 (勾选 Add to PATH) 与 Node.js (npm) 已安装。
 
 ## 快速开始 (手动分步)
 
@@ -76,14 +111,14 @@ docker compose up -d --build
 
 ## 里程碑
 
-- [x] M1: 数据接入 + 元数据目录 + RBAC 权限 + 基础观测
-- [x] M1: 数据接入 + 元数据目录 + RBAC 权限 + 基础观测
-- [x] M2: 知识沉淀 (RAG + 指标语义层) + 多 Agent 协同 (注册/工具/MCP 雏形/任务编排) (当前)
-  - [x] 指标语义层: 统一口径 / 绑定目录表 / 可执行聚合查询 (CRUD API + 指标语义页)
-  - [ ] RAG 流水线 / 向量库 / Agent 记忆
-  - [ ] 编排引擎 / 消息总线 / MCP 工具注册
-- [ ] M3: 细粒度权限 + 动态脱敏 + 审计血缘 + 反馈闭环
-- [ ] M4: 连接器/Agent 开放生态 + 多租户 + 联邦接入
+- [x] **M1**: 数据接入 + 元数据目录 + RBAC 权限 + 基础观测
+- [x] **M2**: 知识沉淀 + 多 Agent 协同 (当前)
+  - [x] RAG 流水线: 文档解析 / 切分 / 向量化 / 语义检索
+  - [x] 指标语义层: 统一口径 / 绑定目录表 / 聚合查询与维度下钻
+  - [x] Agent 注册中心 + 工具注册中心 (MCP 雏形)
+  - [x] 任务编排引擎 + 事件全链路留痕
+- [ ] **M3**: 多 Agent DAG 编排 + Kafka 消息总线 + 动态脱敏/审计血缘 + 反馈闭环
+- [ ] **M4**: 连接器/Agent 开放生态 + 多租户 + 联邦接入
 
 ## 测试
 
@@ -91,3 +126,8 @@ docker compose up -d --build
 cd backend
 ../.venv/bin/python -m pytest tests/ -q    # 13 项核心测试
 ```
+
+## 版本控制
+
+- 远程仓库: `https://github.com/CrazyBuddha-Max/BudaiAgentMesh.git` (分支 `master`)
+- 本地提交后推送: `git push -u origin master` (Windows 侧需完成 GitHub 认证)
