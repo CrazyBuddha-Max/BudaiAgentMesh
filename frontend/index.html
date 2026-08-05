@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BudaiAgentMesh - 智能体数据中台</title>
+    <script>
+      // 首屏前应用主题, 避免亮暗切换闪烁 (与 src/store/theme.ts 的持久化键一致)
+      (function () {
+        try {
+          var saved = JSON.parse(localStorage.getItem('budai-theme') || 'null');
+          var mode = saved && saved.state ? saved.state.mode : 'system';
+          if (mode === 'light' || mode === 'dark') {
+            document.documentElement.setAttribute('data-theme', mode);
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

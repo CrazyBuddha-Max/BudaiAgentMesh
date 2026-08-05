@@ -1,0 +1,32 @@
+{
+  "name": "budai-agent-mesh-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "BudaiAgentMesh 智能体数据中台前端 (Astryx)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@astryxdesign/core": "^0.2.0",
+    "@astryxdesign/theme-neutral": "^0.2.0",
+    "@stylexjs/stylex": "^0.19.0",
+    "@tanstack/react-query": "^5.62.0",
+    "echarts": "^6.1.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router": "^8.3.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.0"
+  }
+}

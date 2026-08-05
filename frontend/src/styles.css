@@ -1,0 +1,91 @@
+/* Astryx 样式引入顺序固定: reset -> 组件基础 -> 主题覆盖 */
+@import '@astryxdesign/core/reset.css';
+@import '@astryxdesign/core/astryx.css';
+@import '@astryxdesign/theme-neutral/theme.css';
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family:
+    -apple-system, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+}
+
+/* 页面通用工具类 */
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.muted {
+  opacity: 0.62;
+}
+
+/* 观测页: 状态分布条 */
+.bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: light-dark(rgba(0, 0, 0, 0.06), rgba(255, 255, 255, 0.12));
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+/* 质量色阶 */
+.q-good {
+  background: #2f9e6e;
+}
+.q-mid {
+  background: #d99a2b;
+}
+.q-bad {
+  background: #d64545;
+}
+
+/* 权限矩阵单元格 */
+.matrix-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.matrix-yes {
+  background: rgba(47, 158, 110, 0.14);
+  color: #1f7a4f;
+}
+.matrix-no {
+  background: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08));
+  color: light-dark(rgba(0, 0, 0, 0.38), rgba(255, 255, 255, 0.45));
+}
+
+/* 登录页背景: 随主题明暗自适应 */
+.login-bg {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(1200px 500px at 20% -10%, rgba(47, 158, 110, 0.08), transparent 60%),
+    radial-gradient(1000px 480px at 90% 110%, rgba(64, 120, 200, 0.08), transparent 60%),
+    light-dark(#f6f7f8, #17181a);
+}

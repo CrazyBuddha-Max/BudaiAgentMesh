@@ -1,0 +1,41 @@
+"""全局配置, 通过环境变量 / .env 覆盖."""
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    # 服务
+    app_name: str = "BudaiAgentMesh"
+    app_version: str = "0.1.0"
+    debug: bool = False
+    api_prefix: str = "/api"
+
+    # 元数据库 (PostgreSQL): 显式配置后生效, 否则回退本地 SQLite
+    database_url: str = ""
+    # 本地默认 SQLite
+    sqlite_url: str = "sqlite+aiosqlite:///./data/budai_mesh.db"
+    db_echo: bool = False
+
+    # 认证
+    jwt_secret: str = "budai-mesh-change-me-in-production-2025-01"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 480
+    # 内置账号: 用户名:密码:角色, 生产环境应替换为 IdP
+    builtin_users: str = "admin:admin123:admin,analyst:analyst123:analyst,viewer:viewer123:viewer"
+
+    # 密钥加密 (Fernet), 用于加密连接器口令
+    secret_key: str = "change-me-secret-key"
+
+    # 允许的来源 (CORS)
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

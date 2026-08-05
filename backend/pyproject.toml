@@ -1,0 +1,22 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "ASYNC", "S", "RUF", "TRY"]
+ignore = [
+    "BLE001",   # 连接器防御性捕获异常是设计意图
+    "S110",     # 画像采样失败静默降级是设计意图
+    "ASYNC230", # CSV 小文件阻塞读可接受, 大文件场景 M2 换异步方案
+    "RUF015",
+    "TRY003",   # 业务异常中文消息直接内联, 可读性优先
+    "TRY300",
+    "E501",     # 中文字符串行长限制收益低
+    "ASYNC240",
+    "S105",     # 开发默认口令, 生产以环境变量覆盖
+    "B027",     # close() 为可选实现的空方法
+    "S608",     # 插值标识符均经 _safe_ident 白名单校验
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "ASYNC"]
