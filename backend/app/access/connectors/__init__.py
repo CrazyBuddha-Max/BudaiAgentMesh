@@ -46,6 +46,10 @@ class SourceContract(ABC):
     async def discover_schema(self) -> list[TableProfile]:
         """发现并采样表结构, 附带质量初检画像."""
 
+    @abstractmethod
+    async def sample_rows(self, table_name: str, limit: int = 10) -> list[dict]:
+        """读取表数据样例 (供 Agent 数据工具调用)."""
+
     async def query_aggregate(
         self,
         table: str,

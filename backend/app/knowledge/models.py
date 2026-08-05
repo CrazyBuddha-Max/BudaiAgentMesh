@@ -1,43 +1,43 @@
-"""知识沉淀层 ORM 模型 (M2 起步: 指标语义层)."""
+"""知识层 ORM 模型: 知识文档与切块."""
 import datetime as dt
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.access.models import CatalogTable
 from app.core.database import Base
 
-AGGREGATIONS = ("sum", "avg", "count", "min", "max", "count_distinct")
 
+class KnowledgeDoc(Base):
+    """知识文档: 一次上传即一个知识资产."""
 
-class MetricDefinition(Base):
-    """指标定义: 统一口径, 绑定物理表, 可执行查询.
-
-    measure 为度量表达式 (如 `unit_price * quantity`), aggregation 决定聚合方式;
-    dimensions 声明允许下钻的维度列, default_filters 固化口径条件 (如排除取消订单).
-    """
-
-    __tablename__ = "metric_definitions"
+    __tablename__ = "knowledge_docs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    name: Mapped[str] = mapped_column(String(128), unique=True, index=True)  # snake_case 机器名
-    display_name: Mapped[str] = mapped_column(String(128))  # 中文名
-    description: Mapped[str] = mapped_column(Text, default="")  # 口径定义
-    table_id: Mapped[int] = mapped_column(ForeignKey("catalog_tables.id", ondelete="CASCADE"), index=True)
-    measure: Mapped[str] = mapped_column(String(255))  # 度量表达式
-    aggregation: Mapped[str] = mapped_column(String(32), default="sum")  # sum/avg/count/min/max/count_distinct
-    dimensions: Mapped[list] = mapped_column(JSON, default=list)  # 允许下钻的维度列
-    default_filters: Mapped[list] = mapped_column(JSON, default=list)  # 口径条件 [{column,op,value}]
-    unit: Mapped[str | None] = mapped_column(String(32), nullable=True)  # 元/件/%
-    owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    status: Mapped[str] = mapped_column(String(16), default="active")  # active/archived
+    title: Mapped[str] = mapped_column(String(255), index=True)
+    source_type: Mapped[str] = mapped_column(String(16))  # txt/md/html/pdf
+    file_name: Mapped[str] = mapped_column(String(512))
+    file_size: Mapped[int] = mapped_column(Integer, default=0)
+    chunk_count: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="processing")  # processing/ready/failed
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[dt.datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    table: Mapped[CatalogTable] = relationship()
+    chunks: Mapped[list["KnowledgeChunk"]] = relationship(
+        back_populates="doc", cascade="all, delete-orphan", lazy="selectin"
+    )
 
-    @property
-    def expression(self) -> str:
-        """可读表达式: AGG(measure)."""
-        inner = "*" if self.measure.strip() == "*" else self.measure
-        return f"{self.aggregation.upper()}({inner})"
+
+class KnowledgeChunk(Base):
+    """知识切块: 原文 + 向量 + 元数据 (Schema 即检索单元)."""
+
+    __tablename__ = "knowledge_chunks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    doc_id: Mapped[int] = mapped_column(ForeignKey("knowledge_docs.id", ondelete="CASCADE"), index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer, default=0)
+    content: Mapped[str] = mapped_column(Text)
+    token_count: Mapped[int] = mapped_column(Integer, default=0)
+    embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+    meta: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # 来源/标题/页码等
+
+    doc: Mapped[KnowledgeDoc] = relationship(back_populates="chunks")

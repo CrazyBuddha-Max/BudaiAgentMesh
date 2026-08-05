@@ -30,6 +30,9 @@ start_dev.bat        :: npm install + vite dev
 - `/dashboard` 数据资产: 接入规模与质量总览
 - `/sources` 数据源管理: 连接器市场、接入表单、测试连接、采集、删除
 - `/catalog` 元数据目录: 表与字段检索、质量初检画像
+- `/knowledge` 知识工作台: 文档上传入库 (txt/md/html/pdf), 语义检索
+- `/metrics` 指标语义层: 统一口径定义、聚合查询与维度下钻
+- `/agents` Agent 协同: Agent 注册、工具注册中心、任务编排与事件链路
 - `/security` 安全治理: RBAC 矩阵、账号、治理能力演进
 - `/observability` 运行观测: 请求量、时延、错误率、状态码分布
 

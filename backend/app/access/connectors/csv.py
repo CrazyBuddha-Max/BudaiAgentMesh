@@ -31,6 +31,18 @@ class CsvConnector(SourceContract):
         if not os.path.exists(self.path):
             raise FileNotFoundError(f"文件不存在: {self.path}")
 
+    async def sample_rows(self, table_name: str, limit: int = 10) -> list[dict]:
+        await self.test_connection()
+        with open(self.path, newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            rows = []
+            for i, row in enumerate(reader):
+                if i >= limit:
+                    break
+                rows.append(dict(row))
+        return rows
+
+
     async def discover_schema(self) -> list[TableProfile]:
         await self.test_connection()
         with open(self.path, newline="", encoding="utf-8-sig") as f:

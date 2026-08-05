@@ -124,3 +124,75 @@ export interface LoginResponse {
   token_type: string;
   user: CurrentUser;
 }
+
+// ---------- 知识层 ----------
+
+export interface KnowledgeDoc {
+  id: number;
+  title: string;
+  source_type: string;
+  file_name: string;
+  file_size: number;
+  chunk_count: number;
+  status: 'processing' | 'ready' | 'failed';
+  error: string | null;
+  created_at: string;
+}
+
+export interface KnowledgeChunk {
+  id: number;
+  chunk_index: number;
+  content: string;
+  token_count: number;
+  meta: {source?: string; chunk?: number} | null;
+}
+
+export interface DocDetail extends KnowledgeDoc {
+  chunks: KnowledgeChunk[];
+}
+
+export interface RetrieveHit {
+  chunk_id: number;
+  doc_id: number;
+  content: string;
+  score: number;
+  metadata: {source?: string; chunk?: number} | null;
+}
+
+// ---------- 协同层 ----------
+
+export interface AgentInfo {
+  id: number;
+  name: string;
+  description: string | null;
+  capabilities: string[];
+  tools: string[];
+  status: 'active' | 'paused' | 'offline';
+  created_at: string;
+}
+
+export interface ToolInfo {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+}
+
+export interface AgentEvent {
+  id: number;
+  event_type: string;
+  payload: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AgentTask {
+  id: number;
+  agent_id: number;
+  title: string | null;
+  objective: string;
+  status: 'pending' | 'running' | 'succeeded' | 'failed';
+  result: string | null;
+  error: string | null;
+  created_at: string;
+  finished_at: string | null;
+  events: AgentEvent[];
+}

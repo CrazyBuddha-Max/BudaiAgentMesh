@@ -8,6 +8,8 @@ import {CatalogPage} from '@/pages/CatalogPage';
 import {SecurityPage} from '@/pages/SecurityPage';
 import {ObservabilityPage} from '@/pages/ObservabilityPage';
 import {MetricsPage} from '@/pages/MetricsPage';
+import {KnowledgePage} from '@/pages/KnowledgePage';
+import {AgentsPage} from '@/pages/AgentsPage';
 
 function Protected({children}: {children: React.ReactNode}) {
   const token = useAuthStore((s) => s.token);
@@ -32,7 +34,9 @@ export function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/sources" element={<SourcesPage />} />
           <Route path="/catalog" element={<CatalogPage />} />
+          <Route path="/knowledge" element={<KnowledgePage />} />
           <Route path="/metrics" element={<MetricsPage />} />
+          <Route path="/agents" element={<AgentsPage />} />
           <Route path="/security" element={<SecurityPage />} />
           <Route path="/observability" element={<ObservabilityPage />} />
         </Route>

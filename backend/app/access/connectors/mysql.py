@@ -41,6 +41,19 @@ class MySqlConnector(SourceContract):
         conn = await self._connect()
         conn.close()
 
+    async def sample_rows(self, table_name: str, limit: int = 10) -> list[dict]:
+        """SELECT 数据样例."""
+        db = self.params["database"]
+        conn = await self._connect()
+        try:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await cur.execute(
+                    f"SELECT * FROM `{_safe_ident(db)}`.`{_safe_ident(table_name)}` LIMIT %s", (limit,)
+                )
+                return list(await cur.fetchall())
+        finally:
+            conn.close()
+
     async def discover_schema(self) -> list[TableProfile]:
         conn = await self._connect()
         try:

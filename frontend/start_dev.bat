@@ -1,24 +1,25 @@
 @echo off
+chcp 65001 >nul 2>nul
 setlocal
 cd /d "%~dp0"
 
 rem ============================================================
-rem  BudaiAgentMesh 前端一键启动 (Windows, Astryx)
+rem  BudaiAgentMesh frontend launcher (Windows, Astryx)
 rem ============================================================
 
 if not exist "node_modules" (
-  echo [1/2] 安装前端依赖, 首次约 1-3 分钟...
+  echo [1/2] Installing frontend dependencies, first run takes 1-3 min...
   call npm install
   if errorlevel 1 (
-    echo [错误] npm install 失败
+    echo [ERROR] npm install failed
     pause
     exit /b 1
   )
 ) else (
-  echo [1/2] 依赖已安装
+  echo [1/2] Dependencies already installed
 )
 
-echo [2/2] 前端已就绪: http://localhost:5173  ^(需后端同时运行^)
+echo [2/2] Frontend ready: http://localhost:5173  (backend must be running)
 echo.
 call npm run dev
 

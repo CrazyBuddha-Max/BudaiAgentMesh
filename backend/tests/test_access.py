@@ -6,7 +6,6 @@ import tempfile
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.core.database import init_db
 from app.main import app
 
 CSV_CONTENT = """id,name,amount,note
@@ -30,12 +29,6 @@ def csv_file() -> str:
 @pytest.fixture(scope="module")
 def anyio_backend():
     return "asyncio"
-
-
-@pytest.fixture(scope="module", autouse=True)
-async def prepare_db():
-    await init_db()
-    yield
 
 
 async def _client():

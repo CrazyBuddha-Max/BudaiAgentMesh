@@ -4,6 +4,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.access import models
+from app.access.connectors import registry
 from app.access.crypto import decrypt_secret, encrypt_secret
 from app.access.schemas import SourceCreate, SourceUpdate
 from app.core.exceptions import NotFoundError
@@ -126,4 +127,24 @@ async def catalog_stats(session: AsyncSession) -> dict:
         "tables": tables,
         "columns": columns,
         "ingestion_runs": runs,
+    }
+
+
+async def query_table_rows(
+    session: AsyncSession, table_id: int, limit: int = 10
+) -> dict:
+    """读取表数据样例 (Agent 数据工具): 经连接器契约执行, 全程受控."""
+    table = await get_table(session, table_id)
+    source = await get_source(session, table.source_id)
+    connector = registry.build(source.source_type, source_params(source))
+    try:
+        rows = await connector.sample_rows(table.table_name, limit=limit)
+    finally:
+        await connector.close()
+    return {
+        "table_id": table.id,
+        "table_name": f"{table.schema_name}.{table.table_name}",
+        "source": source.name,
+        "row_count": table.row_count,
+        "rows": rows,
     }

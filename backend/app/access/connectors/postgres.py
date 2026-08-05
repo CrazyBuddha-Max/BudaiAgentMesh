@@ -41,6 +41,16 @@ class PostgresConnector(SourceContract):
         conn = await self._connect()
         await conn.close()
 
+    async def sample_rows(self, table_name: str, limit: int = 10) -> list[dict]:
+        """SELECT 数据样例, 值序列化为 JSON 安全类型."""
+        schema = self.params.get("schema_name") or "public"
+        conn = await self._connect()
+        try:
+            rows = await conn.fetch(f'SELECT * FROM "{_safe_ident(schema)}"."{_safe_ident(table_name)}" LIMIT $1', limit)
+            return [dict(r) for r in rows]
+        finally:
+            await conn.close()
+
     async def discover_schema(self) -> list[TableProfile]:
         conn = await self._connect()
         try:

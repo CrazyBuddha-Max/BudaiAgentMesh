@@ -1,16 +1,22 @@
 import {useAuthStore} from '@/store/auth';
 import type {
+  AgentInfo,
+  AgentTask,
   CatalogStats,
   CatalogTable,
   ConnectorInfo,
   CurrentUser,
   DataSource,
+  DocDetail,
   FilterRule,
   IngestResult,
+  KnowledgeDoc,
   LoginResponse,
   MetricDefinition,
   MetricQueryResult,
   MetricsSnapshot,
+  RetrieveHit,
+  ToolInfo,
 } from './types';
 
 const BASE = '/api';
@@ -102,6 +108,40 @@ export const api = {
   deleteMetric: (id: number) => request<void>(`/knowledge/metrics/${id}`, {method: 'DELETE'}),
   runMetricQuery: (id: number, payload: {group_by?: string[]; filters?: FilterRule[]; limit?: number}) =>
     request<MetricQueryResult>(`/knowledge/metrics/${id}/query`, {method: 'POST', body: JSON.stringify(payload)}),
+
+  // 知识沉淀层: RAG 文档
+  listKnowledgeDocs: () => request<KnowledgeDoc[]>('/knowledge/documents'),
+  uploadKnowledgeDoc: (file: File, title?: string) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (title) form.append('title', title);
+    return request<KnowledgeDoc>('/knowledge/documents', {
+      method: 'POST',
+      body: form,
+      headers: {}, // Content-Type 交由 fetch 自动生成 multipart boundary
+    });
+  },
+  knowledgeDocDetail: (id: number) => request<DocDetail>(`/knowledge/documents/${id}`),
+  deleteKnowledgeDoc: (id: number) => request<void>(`/knowledge/documents/${id}`, {method: 'DELETE'}),
+  retrieve: (query: string, top_k = 5) =>
+    request<RetrieveHit[]>('/knowledge/retrieve', {
+      method: 'POST',
+      body: JSON.stringify({query, top_k}),
+    }),
+
+  // 多 Agent 协同层
+  listAgents: () => request<AgentInfo[]>('/agents'),
+  createAgent: (payload: {name: string; description?: string; capabilities?: string[]; tools?: string[]}) =>
+    request<AgentInfo>('/agents', {method: 'POST', body: JSON.stringify(payload)}),
+  deleteAgent: (id: number) => request<void>(`/agents/${id}`, {method: 'DELETE'}),
+  listTools: () => request<ToolInfo[]>('/agents/tools'),
+  createTask: (agentId: number, objective: string, title?: string) =>
+    request<AgentTask>(`/agents/${agentId}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify({objective, title}),
+    }),
+  listTasks: () => request<AgentTask[]>('/agents/tasks'),
+  runTask: (taskId: number) => request<AgentTask>(`/agents/tasks/${taskId}/run`, {method: 'POST'}),
 
   // 观测
   metrics: () => request<MetricsSnapshot>('/feedback/metrics'),
