@@ -34,8 +34,8 @@ router = APIRouter()
 SessionDep = Depends(get_session)
 
 _CONNECTOR_META = {
-    "postgres": ("PostgreSQL", "关系型数据库, 支持 CDC 实时增量 (M2)"),
-    "mysql": ("MySQL", "关系型数据库, 支持 CDC 实时增量 (M2)"),
+    "postgres": ("PostgreSQL", "关系型数据库, 实时增量 (CDC) 规划中 (M5)"),
+    "mysql": ("MySQL", "关系型数据库, 实时增量 (CDC) 规划中 (M5)"),
     "csv": ("CSV 文件", "本地结构化文件, 适合快速接入与演示"),
 }
 

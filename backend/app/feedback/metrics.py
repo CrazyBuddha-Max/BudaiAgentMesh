@@ -1,6 +1,6 @@
 """轻量运行指标: 请求量 / 时延 / 错误率 (内存实现, M1 基础观测).
 
-M3 将替换为 Prometheus + OpenTelemetry 全链路 Trace.
+M5 将替换为 Prometheus + OpenTelemetry 全链路 Trace.
 """
 import threading
 import time

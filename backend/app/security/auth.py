@@ -1,6 +1,6 @@
 """认证与授权: JWT 签发 / 内置账号 / RBAC 依赖.
 
-M1 阶段以内置账号演示 RBAC; M3 将接入 SSO/OAuth2.0 与 ABAC 策略引擎.
+M1 阶段以内置账号演示 RBAC; M5 将接入 SSO/OAuth2.0 与 ABAC 策略引擎.
 """
 import datetime as dt
 from typing import Annotated

@@ -1,7 +1,7 @@
 """工具注册中心 (MCP 雏形): 以 JSON Schema 暴露数据能力.
 
 数据能力 = 数据资产上的标准操作, 供 Agent 以 Function Calling 方式调用.
-M3 将升级为完整 MCP Server (stdio/streamable-http).
+M5 将升级为完整 MCP Server (stdio/streamable-http).
 """
 from collections.abc import Callable
 from dataclasses import dataclass, field

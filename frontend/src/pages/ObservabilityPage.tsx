@@ -141,7 +141,7 @@ export function ObservabilityPage() {
             ))}
             <Text type="supporting" style={{marginTop: 6}}>
               <span className="muted">
-                M3 将接入 OpenTelemetry 全链路 Trace 与数据血缘可视化, 覆盖 LLM 请求 → 检索 → 生成
+                M5 将接入 OpenTelemetry 全链路 Trace 与数据血缘可视化, 覆盖 LLM 请求 → 检索 → 生成
               </span>
             </Text>
           </VStack>

@@ -165,8 +165,8 @@ export function DashboardPage() {
                 <span className="muted">接入 → 知识 → 协同 → 安全 → 反馈, 五层一体。每一次 Agent 执行都回流为系统的进化信号。</span>
               </Text>
               <HStack gap={1}>
-                <Badge label="M3 已交付" variant="success" />
-                <Badge label="M4: DAG/Kafka 规划中" variant="neutral" />
+                <Badge label="M4 已交付" variant="success" />
+                <Badge label="M5: 多租户/开放生态 规划中" variant="neutral" />
               </HStack>
             </VStack>
           </Card>

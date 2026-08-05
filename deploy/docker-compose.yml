@@ -43,7 +43,7 @@ services:
     ports:
       - "5432:5432"
 
-  # M2 起启用: 事件流 / 对象存储 / 向量库
+  # M5 起启用: 事件流 / 对象存储 / 向量库
   # redis:
   #   image: redis:7-alpine
   # kafka:

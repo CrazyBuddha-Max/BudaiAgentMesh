@@ -214,7 +214,7 @@ export function AgentsPage() {
           <HStack gap={2} vAlign="center">
             <Wrench size={17} />
             <Text weight="semibold">工具注册中心 ({tools.data?.length ?? 0})</Text>
-            <Text type="supporting"><span className="muted">数据能力以标准 Schema 暴露, M3 升级为完整 MCP Server</span></Text>
+            <Text type="supporting"><span className="muted">数据能力以标准 Schema 暴露, M5 升级为完整 MCP Server</span></Text>
           </HStack>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12}}>
             {(tools.data ?? []).map((t: ToolInfo) => (

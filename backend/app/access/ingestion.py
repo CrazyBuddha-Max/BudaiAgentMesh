@@ -90,7 +90,7 @@ async def _sync_catalog(
             table.schema_name = profile.schema_name
             await session.flush()
 
-        # 列级全量重建 (简单可靠; 增量需引入变更检测, 留待 M2)
+        # 列级全量重建 (简单可靠; 增量需引入变更检测, 留待 M5)
         await session.execute(
             models.CatalogColumn.__table__.delete().where(models.CatalogColumn.table_id == table.id)
         )

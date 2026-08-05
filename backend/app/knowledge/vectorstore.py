@@ -1,6 +1,6 @@
 """向量检索: 余弦相似度暴力检索 (M2 起步实现).
 
-M3 将迁移至 pgvector / Milvus (接口保持, 仅换实现).
+M5 将迁移至 pgvector / Milvus (接口保持, 仅换实现).
 """
 import math
 from dataclasses import dataclass

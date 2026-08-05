@@ -36,11 +36,11 @@ const MATRIX: {capability: string; admin: boolean; analyst: boolean; viewer: boo
 const CAPS: {name: string; desc: string; stage: string}[] = [
   {name: '认证 (JWT)', desc: '令牌签发与校验, 内置账号 RBAC 角色模型', stage: '已启用'},
   {name: '权限模型 (RBAC)', desc: 'viewer / analyst / admin 三级角色门槛', stage: '已启用'},
-  {name: '细粒度权限 (行/列/单元格)', desc: '基于血缘传导的上下文感知授权', stage: '规划中 (M3)'},
-  {name: '动态脱敏', desc: 'PII 识别 + 掩码/泛化/令牌化', stage: '规划中 (M3)'},
-  {name: '审计日志', desc: '全链路操作审计, 追加式存储不可篡改', stage: '规划中 (M3)'},
-  {name: '数据血缘', desc: '源表 → 加工 → 知识 → Agent 输出全链路追溯', stage: '规划中 (M3)'},
-  {name: '生命周期治理', desc: '保留期限 / 归档 / 销毁, 合规 (PIPL/GDPR)', stage: '规划中 (M4)'},
+  {name: '动态脱敏', desc: '敏感列识别 + 按角色动态掩码 (手机/身份证/银行卡/邮箱/姓名/地址)', stage: '已启用 (M3)'},
+  {name: '审计日志', desc: '登录/采集/指标查询/数据采样/Agent 任务全链路留痕, 独立会话写入', stage: '已启用 (M3)'},
+  {name: '数据血缘', desc: '源表 → 指标 → 任务 → 结果, 图结构可查询可追溯', stage: '已启用 (M3)'},
+  {name: '细粒度权限 (行/列/单元格)', desc: '基于血缘传导的上下文感知授权', stage: '规划中 (M5)'},
+  {name: '生命周期治理', desc: '保留期限 / 归档 / 销毁, 合规 (PIPL/GDPR)', stage: '规划中 (M5)'},
 ];
 
 export function SecurityPage() {
