@@ -11,39 +11,46 @@
 
 ## 五大层次
 
-| 层 | 名称 | 职责 | 状态 |
-| --- | --- | --- | --- |
-| ① | 数据统一接入层 | 连接器市场 / 采集引擎 / Schema 注册 / 元数据目录 | 已实现 (postgres/mysql/csv) |
-| ② | 知识沉淀层 | RAG 流水线 (解析/切分/向量化/语义检索) · 指标语义层 · 知识库 | 已实现 |
-| ③ | 多 Agent 协同层 | Agent 注册 / 模板市场 / 工具注册中心 (MCP 雏形) / 真并行 DAG 编排 / 事件总线 | 已实现 |
-| ④ | 安全治理层 | IAM (JWT/RBAC) · 动态脱敏 · 列级权限 · 审计日志 · 数据血缘 · 生命周期 | 已实现 |
-| ⑤ | 效果反馈层 | 运行指标 · 任务反馈闭环 · 评分统计 | 已实现 |
-| ⚡ | MCP Server | 完整 Model Context Protocol 端点 (/mcp/mcp), 4 个数据工具 | 已实现 (M5) |
+
+| 层   | 名称          | 职责                                                    | 状态                       |
+| --- | ----------- | ----------------------------------------------------- | ------------------------ |
+| ①   | 数据统一接入层     | 连接器市场 / 采集引擎 / Schema 注册 / 元数据目录                      | 已实现 (postgres/mysql/csv) |
+| ②   | 知识沉淀层       | RAG 流水线 (解析/切分/向量化/语义检索) · 指标语义层 · 知识库                | 已实现                      |
+| ③   | 多 Agent 协同层 | Agent 注册 / 模板市场 / 工具注册中心 (MCP 雏形) / 真并行 DAG 编排 / 事件总线 | 已实现                      |
+| ④   | 安全治理层       | IAM (JWT/RBAC) · 动态脱敏 · 列级权限 · 审计日志 · 数据血缘 · 生命周期     | 已实现                      |
+| ⑤   | 效果反馈层       | 运行指标 · 任务反馈闭环 · 评分统计                                  | 已实现                      |
+| ⚡   | MCP Server  | 完整 Model Context Protocol 端点 (/mcp/mcp), 4 个数据工具      | 已实现 (M5)                 |
+
 
 ## 当前进度 (2025-08)
 
-| 指标 | 数值 |
-| --- | --- |
-| 后端 API 端点 | 50+ 个 |
-| 数据模型表 | 14 张 (含列权限规则) |
-| 前端页面 | 9 个 |
-| 自动化测试 | 24 项, 全部通过 (M5 新增列权限/生命周期/MCP 3 项) |
+
+| 指标         | 数值                                  |
+| ---------- | ----------------------------------- |
+| 后端 API 端点  | 50+ 个                               |
+| 数据模型表      | 14 张 (含列权限规则)                       |
+| 前端页面       | 9 个                                 |
+| 自动化测试      | 24 项, 全部通过 (M5 新增列权限/生命周期/MCP 3 项)  |
 | MCP Server | /mcp/mcp (streamable-http), 4 个数据工具 |
-| 代码质量 | ruff 全绿 |
+| 代码质量       | ruff 全绿                             |
+
 
 ### 分层实现明细
 
 **① 数据统一接入层** (app/access)
+
 - 连接器市场: PostgreSQL / MySQL / CSV, 统一 `SourceContract` 契约 (发现/采样/聚合/鉴权参数)
 - 采集引擎: Schema 自动发现 + 质量初检 (空值率/区分度/采样值) + 采集任务留痕
 - 元数据目录: 数据源 CRUD / 表列检索 / 目录统计 / 数据样例查询
 
 **② 知识沉淀层** (app/knowledge)
+
 - RAG 流水线: 文档解析 (txt/md/html/pdf) → 段落+重叠切分 → 向量化 (HashEmbedder 离线兜底 / OpenAI 可插拔) → 余弦语义检索
 - 指标语义层: 指标定义 CRUD + 表达式白名单校验 (expr.py) + 聚合查询/维度下钻/越权拦截
 - 检索接口抽象: M3 迁移 pgvector/Milvus 不动业务代码
 
 **③ 多 Agent 协同层** (app/agents)
+
 - Agent 注册中心: 身份 / 能力声明 (Capability Manifest) / 状态管理
 - Agent 模板市场 (M4): 预置 5 个角色模板 (分析助手/检索员/分析员/报告员/审计员), 一键创建
 - 工具注册中心 (MCP 雏形): `knowledge.retrieve` / `catalog.search_tables` / `data.query_table`, JSON Schema 暴露
@@ -51,6 +58,7 @@
 - 事件总线 (M4): 进程内队列 + Worker 分发 (配置 KAFKA_BROKERS 自动切 Kafka 适配器), 事件直落库 + 总线发布
 
 **④ 安全治理层** (app/security)
+
 - JWT 签发校验 + 内置账号 RBAC 三级角色 (viewer/analyst/admin)
 - 动态脱敏 (M3): 敏感列自动识别 (手机/身份证/银行卡/邮箱/姓名/地址) + 按角色掩码
 - 细粒度列级权限 (M5): 按角色禁止访问指定列, 与脱敏叠加 (数据采样/指标维度双拦截)
@@ -60,6 +68,7 @@
 - 接口级权限门槛 + 指标维度越权拦截 + SQL 标识符白名单防注入 + Fernet 口令加密
 
 **⑤ 效果反馈层** (app/feedback)
+
 - 运行指标: 请求量 / 平均时延 / P95 / 错误率 / 状态码分布 (滑动窗口)
 - 反馈闭环 (M3): Agent 任务评分 (1-5 星) + 评论, 与任务/Trace 绑定可回溯, 评分统计驱动迭代
 
@@ -79,7 +88,7 @@ cd /d D:\code\budai\Budai-company\BudaiAgentMesh
 start_all.bat
 ```
 
-脚本会自动: 定位 Python -> 创建 Windows venv -> 安装依赖 -> 生成演示数据 -> 启动前后端。
+脚本会自动: 定位 Python -&gt; 创建 Windows venv -&gt; 安装依赖 -&gt; 生成演示数据 -&gt; 启动前后端。
 批处理文件为纯 ASCII 编写, 兼容任意 Windows 代码页。
 
 > 需要 Python 3.12 (勾选 Add to PATH) 与 Node.js (npm) 已安装。
@@ -115,7 +124,7 @@ docker compose up -d --build
 ## 文档
 
 - [系统整体架构设计](docs/ARCHITECTURE.md)
-- [后端接口] 启动后访问 http://localhost:8000/docs (OpenAPI)
+- [后端接口] 启动后访问 [http://localhost:8000/docs](http://localhost:8000/docs) (OpenAPI)
 - [前端说明](frontend/README.md)
 
 ## 里程碑
@@ -140,7 +149,3 @@ cd backend
 ../.venv/bin/python -m pytest tests/ -q    # 24 项核心测试
 ```
 
-## 版本控制
-
-- 远程仓库: `https://github.com/CrazyBuddha-Max/BudaiAgentMesh.git` (分支 `master`)
-- 本地提交后推送: `git push -u origin master` (Windows 侧需完成 GitHub 认证)
