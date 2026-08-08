@@ -7,6 +7,7 @@ import {Text} from '@astryxdesign/core/Text';
 import {Button} from '@astryxdesign/core/Button';
 import {Badge} from '@astryxdesign/core/Badge';
 import {Selector} from '@astryxdesign/core/Selector';
+import {CheckboxList, CheckboxListItem} from '@astryxdesign/core/CheckboxList';
 import {useToast} from '@astryxdesign/core/Toast';
 import type {AgentEvent, AgentTask} from '@/api/types';
 import {Bot, ListTree, MessageSquareText, Plus, Send, Star, User as UserIcon} from 'lucide-react';
@@ -177,33 +178,38 @@ export function TasksPage() {
               onChange={(v) => setMainAgentId(v)}
               options={(agents.data ?? []).map((a) => ({label: a.name, value: String(a.id)}))}
             />
-            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-              <Selector
-                label="协作 Agent"
-                value={collaborators[0] ?? ''}
+            <div style={{display: 'flex', alignItems: 'flex-start', gap: 8, flexDirection: 'column'}}>
+              <HStack gap={2} vAlign="center">
+                <Text type="supporting"><span className="muted">协作 Agent (可多选, 默认智能推荐 1 个)</span></Text>
+                {!autoCollab && collaborators.length > 0 && <Badge label="✨ 智能推荐" variant="success" />}
+                {autoCollab && (
+                  <Button
+                    label="恢复智能推荐"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setAutoCollab(false);
+                      const rec = recommendCollaborator();
+                      setCollaborators(rec ? [rec] : []);
+                    }}
+                  />
+                )}
+              </HStack>
+              <CheckboxList
+                label=""
+                value={collaborators}
                 onChange={(v) => {
                   setAutoCollab(true);
-                  setCollaborators(v ? [v] : []);
+                  setCollaborators(v);
                 }}
-                options={(agents.data ?? [])
+                description="按能力分工: 检索员 / 分析员"
+              >
+                {(agents.data ?? [])
                   .filter((a) => String(a.id) !== mainAgentId)
-                  .map((a) => ({label: a.name, value: String(a.id)}))}
-              />
-              {!autoCollab && collaborators[0] && (
-                <Badge label={`✨ 智能推荐`} variant="success" />
-              )}
-              {autoCollab && (
-                <Button
-                  label="恢复智能推荐"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setAutoCollab(false);
-                    const rec = recommendCollaborator();
-                    setCollaborators(rec ? [rec] : []);
-                  }}
-                />
-              )}
+                  .map((a) => (
+                    <CheckboxListItem key={a.id} label={`${a.name} (${(a.capabilities ?? []).join('/') || '通用'})`} value={String(a.id)} />
+                  ))}
+              </CheckboxList>
             </div>
             {activeTask && (
               <Button
