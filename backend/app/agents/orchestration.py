@@ -172,17 +172,17 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
 
         knowledge_hits, table_hits = await asyncio.gather(branch_retrieve(), branch_search())
 
-        # 数据采样: 取目录检索命中的第一张表
+        # 数据采样: 取目录检索命中的第一张表 (采样更多行供 LLM 完整分析)
         candidates = table_hits if isinstance(table_hits, list) else []
         sample_rows_result = None
         if candidates:
             await emit(
                 session, "tool_call", analyst.id,
-                {"tool": "data.query_table", "args": {"table_id": candidates[0]["table_id"], "limit": 5}},
+                {"tool": "data.query_table", "args": {"table_id": candidates[0]["table_id"], "limit": 100}},
             )
             resp = await execute_tool(
                 session, "data.query_table",
-                {"table_id": candidates[0]["table_id"], "limit": 5, "actor": f"agent:{analyst.name}", "role": "analyst"},
+                {"table_id": candidates[0]["table_id"], "limit": 100, "actor": f"agent:{analyst.name}", "role": "analyst"},
             )
             if resp.get("ok"):
                 sample_rows_result = resp["result"]
@@ -214,7 +214,7 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
             if rows:
                 import json as _json
 
-                llm_context += "\n\n=== 数据表采样 ===\n" + _json.dumps(rows, ensure_ascii=False, default=str)[:1200]
+                llm_context += "\n\n=== 数据表采样 ===\n" + _json.dumps(rows, ensure_ascii=False, default=str)[:6000]
 
         if llm_mode:
             try:
