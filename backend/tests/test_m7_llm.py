@@ -194,7 +194,7 @@ async def test_orchestration_llm_plan_and_summary(monkeypatch):
         assert resp2.status_code == 200, resp2.text
         body2 = resp2.json()
         assert body2["status"] == "succeeded"
-        assert "LLM 汇总" in (body2["result"] or "")
+        assert "报告" in (body2["result"] or "")
         event_types = {e["event_type"] for e in body2["events"]}
         assert "llm.plan" in event_types
         assert "llm.summary" in event_types
@@ -278,3 +278,73 @@ async def test_catalog_chinese_keyword_hits_english_table(tmp_path):
         names = [t["table_name"] for t in resp.json()]
         assert any("order" in n for n in names), names
         await client.delete(f"/api/access/sources/{sid}", headers=ah)
+
+
+# ---------- 报告撰写员分工 (M7) ----------
+
+
+@pytest.mark.anyio
+async def test_report_draft_agent_writes_report(monkeypatch):
+    """协作 Agent 含 report_draft 能力时, 报告撰写阶段由它承担 (llm.summary 事件绑定它)."""
+    from app.agents import llm
+    from app.core.database import SessionLocal
+
+    async with await _client() as client:
+        token = await _login(client)
+        ah = _auth(token)
+
+        # 主控 (无 report_draft) + 报告撰写员 (report_draft)
+        resp = await client.post("/api/agents", json={"name": "主控甲", "capabilities": ["data_access"]}, headers=ah)
+        main_id = resp.json()["id"]
+        resp = await client.post("/api/agents", json={"name": "报告撰写员", "capabilities": ["report_draft"]}, headers=ah)
+        writer_id = resp.json()["id"]
+
+        from app.agents.orchestration import _pick_executor
+
+        class FakeAgent:
+            def __init__(self, id_, capabilities):
+                self.id = id_
+                self.capabilities = capabilities
+                self.name = str(id_)
+
+        main = FakeAgent(main_id, ["data_access"])
+        writer = FakeAgent(writer_id, ["report_draft"])
+        # 报告撰写应选中 writer
+        picked = _pick_executor(main, [writer], "report_draft")
+        assert picked.id == writer_id
+        # 数据访问仍归主控 (writer 无 data_access)
+        picked2 = _pick_executor(main, [writer], "data_access")
+        assert picked2.id == main_id
+
+        async def fake_chat(provider, messages, temperature=None, max_tokens=None):
+            sys_msg = messages[0]["content"]
+            if "规划器" in sys_msg or "JSON" in sys_msg:
+                return '{"steps": ["knowledge.retrieve", "catalog.search_tables", "data.query_table"], "keyword": "订单"}'
+            return "产品报告: 订单分析完成, 详见数据。"
+
+        monkeypatch.setattr(llm, "chat_completion", fake_chat)
+
+        # 配置默认提供方
+        async with SessionLocal() as session:
+            from app.agents.llm import create_provider
+
+            await create_provider(session, "RP", "custom", "http://mock/v1", api_key="k", model="m", is_default=True)
+
+        # 创建任务: 主控 + 报告撰写员协作
+        resp = await client.post(
+            f"/api/agents/{main_id}/tasks",
+            json={"objective": "帮我分析订单数据，写一份产品报告", "collaborators": [writer_id]},  # noqa: RUF001
+            headers=ah,
+        )
+        task_id = resp.json()["id"]
+        resp = await client.post(f"/api/agents/tasks/{task_id}/run", headers=ah)
+        body = resp.json()
+        assert body["status"] == "succeeded", body.get("error")
+        # llm.summary 事件由报告撰写员执行
+        summary_events = [e for e in body["events"] if e["event_type"] == "llm.summary"]
+        assert summary_events, body["events"]
+        assert summary_events[0]["agent_id"] == writer_id
+
+        # 清理
+        await client.delete(f"/api/agents/{main_id}", headers=ah)
+        await client.delete(f"/api/agents/{writer_id}", headers=ah)

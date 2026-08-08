@@ -144,10 +144,10 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
             {"steps": steps, "llm": llm_mode},
         )
 
-        # 分工: 优先协作 Agent 承担专业步骤, 主控规划与汇总
+        # 分工: 协作 Agent 按能力承担专业步骤 (检索/分析/报告撰写/审计), 主控兜底
         retriever = _pick_executor(main_agent, collaborators, "knowledge_retrieval")
         analyst = _pick_executor(main_agent, collaborators, "data_access")
-        reporter = main_agent
+        reporter = _pick_executor(main_agent, collaborators, "report_draft")  # 报告撰写员负责最终汇总
 
         # ---- 并行分支 (M4): 独立会话, asyncio.gather 真并行 ----
         async def branch_retrieve() -> list:
@@ -200,6 +200,11 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
             sampling_line = _summarize(sample_rows_result)
         lines.append(f"[{analyst.name}·数据采样] {sampling_line}")
 
+        # 报告撰写阶段 (M7): 由 report_draft 能力者 (报告撰写员) 承担, 主控兜底
+        writer = reporter if reporter != main_agent else main_agent
+        writer_role = "报告撰写" if reporter != main_agent else "主控汇总"
+        lines.append(f"[{writer.name}·{writer_role}] 基于以上数据/知识生成结构化报告")
+
         # 汇总上下文: 附上知识命中原文与采样数据, 让 LLM 能给出具体答案而非泛泛而谈
         llm_context = "\n".join(lines)
         knowledge_texts: list[str] = []
@@ -233,17 +238,17 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
                         {"role": "user", "content": llm_context},
                     ],
                 )
-                task.result = f"【LLM 汇总 · {provider.name}/{provider.model}】\n\n{answer}"
-                await emit(session, "llm.summary", reporter.id, {"provider": provider.name, "model": provider.model})
+                task.result = f"【报告 · {writer.name} ({provider.name}/{provider.model})】\n\n{answer}"
+                await emit(session, "llm.summary", writer.id, {"provider": provider.name, "model": provider.model, "writer": writer.name})
             except Exception as exc:
                 task.result = "\n".join(lines)
-                await emit(session, "llm.summary", reporter.id, {"error": str(exc)[:200], "fallback": True})
+                await emit(session, "llm.summary", writer.id, {"error": str(exc)[:200], "fallback": True})
         else:
             task.result = "\n".join(lines)
         task.status = "succeeded"
         task.finished_at = dt.datetime.now(dt.UTC)
         await session.commit()
-        await emit(session, "completion", reporter.id, {"status": "succeeded"})
+        await emit(session, "completion", writer.id, {"status": "succeeded"})
         await record_audit(f"agent:{reporter.name}", "task.run", "task", task.id, {"objective": task.objective})
     except Exception as exc:
         logger.exception("任务执行失败 task_id=%s", task.id)

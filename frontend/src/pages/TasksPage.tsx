@@ -19,7 +19,7 @@ const EVENT_LABEL: Record<string, {label: string; variant: string}> = {
   tool_call: {label: '调用工具', variant: 'blue'},
   tool_result: {label: '工具结果', variant: 'green'},
   retrieval: {label: '知识检索', variant: 'cyan'},
-  'llm.summary': {label: 'LLM 汇总', variant: 'purple'},
+  'llm.summary': {label: '报告撰写', variant: 'purple'},
   completion: {label: '任务完成', variant: 'success'},
   error: {label: '执行异常', variant: 'error'},
 };
@@ -326,8 +326,8 @@ export function TasksPage() {
                       <div style={{flex: 1, minWidth: 0}}>
                         <Text weight="semibold" style={{fontSize: 13, marginBottom: 4}}>
                           BudaiAgentMesh · 多 Agent 团队
-                          {activeTask.result?.startsWith('【LLM 汇总') && (
-                            <span className="muted" style={{fontWeight: 400}}> · {activeTask.result.split('\n')[0].replace('【LLM 汇总 · ', '').replace('】', '')}</span>
+                          {activeTask.result?.startsWith('【报告') && (
+                            <span className="muted" style={{fontWeight: 400}}> · {activeTask.result.split('\n')[0].replace('【报告 · ', '').split(' (')[0]}</span>
                           )}
                         </Text>
                         <Text className="mono" style={{whiteSpace: 'pre-wrap'}}>{answerText(activeTask)}</Text>
