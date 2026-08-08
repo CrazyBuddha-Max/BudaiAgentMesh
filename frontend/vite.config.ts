@@ -10,6 +10,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: '0.0.0.0',  // 允许手机模拟器/局域网访问 (10.0.2.2 等)
     port: 5173,
     proxy: {
       '/api': {
