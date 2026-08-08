@@ -103,6 +103,7 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
     try:
         # ---- LLM 规划 (真实调用, 失败降级为固定步骤) ----
         steps: list[str] = ["knowledge.retrieve", "catalog.search_tables", "data.query_table"]
+        search_keyword: str = task.objective  # 目录检索关键词 (LLM 规划产出, 降级用完整目标)
         if llm_mode:
             try:
                 from app.agents.llm import chat_completion
@@ -111,9 +112,11 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
                     provider,
                     [
                         {"role": "system", "content": (
-                            "你是任务规划器。根据用户目标, 从工具 knowledge.retrieve(知识检索), "
-                            "catalog.search_tables(目录检索), data.query_table(数据采样) 中选择并排序 1-5 个步骤。"
-                            "只输出 JSON 数组, 如 [\"knowledge.retrieve\", \"catalog.search_tables\"]。"
+                            "你是任务规划器。根据用户目标输出 JSON: "
+                            "{\"steps\": [从 knowledge.retrieve(知识检索), catalog.search_tables(目录检索), "
+                            "data.query_table(数据采样) 中选 1-5 个], "
+                            "\"keyword\": 用于目录检索的简短关键词 (1-3 个英文或中文词, 如 \"order\" 或 \"订单\")}。"
+                            "只输出 JSON。"
                         )},
                         {"role": "user", "content": task.objective},
                     ],
@@ -123,12 +126,16 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
                 import json
                 import re
 
-                m = re.search(r"\[[^\]]+\]", plan)
+                m = re.search(r"\{[^}]*\}", plan)
                 if m:
                     parsed = json.loads(m.group(0))
-                    if isinstance(parsed, list) and parsed:
-                        steps = [str(s) for s in parsed][:5]
-                await emit(session, "llm.plan", main_agent.id, {"provider": provider.name, "model": provider.model, "steps": steps})
+                    if isinstance(parsed, dict):
+                        if isinstance(parsed.get("steps"), list) and parsed["steps"]:
+                            steps = [str(s) for s in parsed["steps"]][:5]
+                        kw = str(parsed.get("keyword", "")).strip()
+                        if kw and kw != "None":
+                            search_keyword = kw
+                await emit(session, "llm.plan", main_agent.id, {"provider": provider.name, "model": provider.model, "steps": steps, "keyword": search_keyword})
             except Exception as exc:
                 await emit(session, "llm.plan", main_agent.id, {"provider": provider.name, "error": str(exc)[:200], "fallback": True})
 
@@ -155,8 +162,8 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
 
         async def branch_search() -> list:
             async with SessionLocal() as bs:
-                await emit(bs, "tool_call", analyst.id, {"tool": "catalog.search_tables", "args": {"keyword": task.objective[:32]}})
-                resp = await execute_tool(bs, "catalog.search_tables", {"keyword": task.objective[:32]})
+                await emit(bs, "tool_call", analyst.id, {"tool": "catalog.search_tables", "args": {"keyword": search_keyword}})
+                resp = await execute_tool(bs, "catalog.search_tables", {"keyword": search_keyword})
                 if not resp.get("ok"):
                     raise RuntimeError(f"目录检索失败: {resp.get('error')}")
                 hits = resp["result"]

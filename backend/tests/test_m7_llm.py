@@ -245,3 +245,36 @@ async def test_agent_edit_llm_provider_binding():
         # 清理
         await client.delete(f"/api/agents/{agent_id}", headers=ah)
         await client.delete(f"/api/agents/llm/providers/{pid}", headers=ah)
+
+
+# ---------- 目录中英同义检索 (M7) ----------
+
+
+@pytest.mark.anyio
+async def test_catalog_chinese_keyword_hits_english_table(tmp_path):
+    """中文"订单"检索能命中英文表名 sample_orders."""
+    from app.access.catalog import _expand_search_terms
+
+    assert "orders" in _expand_search_terms("分析订单数据")
+    assert "sales" in _expand_search_terms("销售分析")
+    assert "customer" in _expand_search_terms("客户洞察")
+
+    csv_path = tmp_path / "orders.csv"
+    csv_path.write_text("id,region,amount\n1,east,10\n", encoding="utf-8")
+    async with await _client() as client:
+        token = await _login(client)
+        ah = _auth(token)
+        resp = await client.post(
+            "/api/access/sources/upload",
+            data={"name": "检索测试源", "description": "orders"},
+            files={"file": ("orders.csv", b"id,region,amount\n1,east,10\n", "text/csv")},
+            headers=ah,
+        )
+        sid = resp.json()["id"]
+        await client.post(f"/api/access/sources/{sid}/ingest", headers=ah)
+
+        # 中文关键词命中英文表名
+        resp = await client.get("/api/access/catalog/tables", params={"keyword": "订单"}, headers=ah)
+        names = [t["table_name"] for t in resp.json()]
+        assert any("order" in n for n in names), names
+        await client.delete(f"/api/access/sources/{sid}", headers=ah)

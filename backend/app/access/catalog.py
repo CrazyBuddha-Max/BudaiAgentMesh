@@ -102,12 +102,65 @@ async def list_tables(
         tenant_sources = select(models.DataSource.id).where(models.DataSource.tenant_id == tenant)
         stmt = stmt.where(models.CatalogTable.source_id.in_(tenant_sources))
     if keyword:
+        # M7: 中英同义词映射 + 关键词拆分, 让中文检索能命中英文表名 (订单 -> orders)
         like = f"%{keyword}%"
+        terms = _expand_search_terms(keyword)
         stmt = stmt.where(
-            or_(models.CatalogTable.table_name.ilike(like), models.CatalogTable.description.ilike(like))
+            or_(
+                models.CatalogTable.table_name.ilike(like),
+                models.CatalogTable.description.ilike(like),
+                *[
+                    or_(
+                        models.CatalogTable.table_name.ilike(f"%{t}%"),
+                        models.CatalogTable.description.ilike(f"%{t}%"),
+                    )
+                    for t in terms
+                ],
+            )
         )
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+# 中文业务词 -> 常见英文表名列名 (帮助 LLM 中文检索命中英文表名)
+_TABLE_SYNONYMS: dict[str, list[str]] = {
+    "订单": ["order", "orders", "sales"],
+    "销售": ["sales", "sale", "revenue", "order"],
+    "用户": ["user", "users", "customer", "customers", "member"],
+    "客户": ["customer", "customers", "user", "users"],
+    "产品": ["product", "products", "sku", "item"],
+    "商品": ["product", "products", "sku", "item"],
+    "成本": ["cost", "costs"],
+    "库存": ["stock", "inventory", "warehouse"],
+    "毛利": ["margin", "gross", "profit"],
+    "收入": ["revenue", "income", "sales"],
+    "员工": ["employee", "employees", "staff"],
+    "部门": ["dept", "department", "org"],
+    "区域": ["region", "area", "zone"],
+}
+
+
+def _expand_search_terms(keyword: str) -> list[str]:
+    """把检索词扩展为同义候选: 原文 + 中英映射词."""
+    terms: list[str] = []
+    for zh, en_list in _TABLE_SYNONYMS.items():
+        if zh in keyword:
+            terms.extend(en_list)
+    # 关键词按分隔符拆分, 保留长度>=2的片段 (如 "分析订单数据" -> 订单/数据)
+    import re
+
+    for seg in re.split(r"[\s,、;；]+|分析|参考|说明|计算|给出", keyword):  # noqa: RUF001  全角分隔符按中文习惯保留
+        seg = seg.strip()
+        if 1 < len(seg) <= 12:
+            terms.append(seg)
+    # 去重保序
+    seen: set[str] = set()
+    result = []
+    for t in terms:
+        if t not in seen:
+            seen.add(t)
+            result.append(t)
+    return result
 
 
 async def get_table(session: AsyncSession, table_id: int) -> models.CatalogTable:
