@@ -41,6 +41,40 @@ class PostgresConnector(SourceContract):
         conn = await self._connect()
         await conn.close()
 
+    async def detect_changes(self, previous_watermark: str | None) -> dict:
+        """增量检测 (M6): 表集合指纹 (每表 行数 + 列名), 行数/结构变化即重采.
+
+        轻量启发式, 适合演示与小库; 生产建议切换逻辑复制 (wal2json) 级 CDC.
+        """
+        schema = self.params.get("schema_name") or "public"
+        conn = await self._connect()
+        try:
+            tables = await conn.fetch(
+                "SELECT table_name FROM information_schema.tables "
+                "WHERE table_schema = $1 AND table_type = 'BASE TABLE' ORDER BY table_name",
+                schema,
+            )
+            parts = []
+            for t in tables:
+                tname = t["table_name"]
+                count = await conn.fetchval(f'SELECT COUNT(*) FROM "{_safe_ident(schema)}"."{_safe_ident(tname)}"')
+                cols = await conn.fetch(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position",
+                    schema,
+                    tname,
+                )
+                parts.append(f"{tname}:{count}:[{','.join(c['column_name'] for c in cols)}]")
+            fingerprint = "|".join(parts)
+        finally:
+            await conn.close()
+        changed = previous_watermark != fingerprint
+        return {
+            "changed": changed,
+            "watermark": fingerprint,
+            "detail": "表结构/行数有变化, 重新采集" if changed else "无变化, 增量跳过",
+        }
+
     async def sample_rows(self, table_name: str, limit: int = 10) -> list[dict]:
         """SELECT 数据样例, 值序列化为 JSON 安全类型."""
         schema = self.params.get("schema_name") or "public"

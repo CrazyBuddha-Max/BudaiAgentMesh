@@ -12,6 +12,8 @@ import type {
   CurrentUser,
   DataSource,
   DocDetail,
+  FederationPeer,
+  FederationResult,
   FeedbackStats,
   FilterRule,
   IngestResult,
@@ -25,6 +27,7 @@ import type {
   MetricsSnapshot,
   RetrieveHit,
   TaskFeedback,
+  TenantInfo,
   ToolInfo,
 } from './types';
 
@@ -181,6 +184,30 @@ export const api = {
     }),
   deleteColumnPolicy: (id: number) => request<void>(`/security/column-policies/${id}`, {method: 'DELETE'}),
   lifecycle: () => request<LifecycleData>('/security/lifecycle'),
+
+  // M6: 多租户
+  tenants: () => request<TenantInfo[]>('/security/tenants'),
+  createTenant: (code: string, name: string) =>
+    request<TenantInfo>('/security/tenants', {method: 'POST', body: JSON.stringify({code, name})}),
+  setTenantStatus: (code: string, status: string) =>
+    request<TenantInfo>(`/security/tenants/${code}`, {method: 'PATCH', body: JSON.stringify({status})}),
+
+  // M6: 联邦接入
+  federationPeers: () => request<FederationPeer[]>('/access/federation/peers'),
+  createFederationPeer: (name: string, baseUrl: string, apiToken?: string) =>
+    request<FederationPeer>('/access/federation/peers', {
+      method: 'POST',
+      body: JSON.stringify({name, base_url: baseUrl, api_token: apiToken || null}),
+    }),
+  setFederationPeerStatus: (id: number, status: string) =>
+    request<FederationPeer>(`/access/federation/peers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({status}),
+    }),
+  deleteFederationPeer: (id: number) =>
+    request<void>(`/access/federation/peers/${id}`, {method: 'DELETE'}),
+  federationSearch: (keyword?: string) =>
+    request<FederationResult[]>(`/access/federation/search?keyword=${encodeURIComponent(keyword ?? '')}`),
 
   // M3: 反馈闭环
   submitFeedback: (taskId: number, rating: number, comment?: string) =>

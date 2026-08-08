@@ -12,8 +12,8 @@ import {Button} from '@astryxdesign/core/Button';
 import {TextInput} from '@astryxdesign/core/TextInput';
 import {Selector} from '@astryxdesign/core/Selector';
 import {useToast} from '@astryxdesign/core/Toast';
-import {ShieldCheck, ScanSearch, ScrollText, GitBranch, EyeOff, ShieldBan, Database as DbIcon} from 'lucide-react';
-import type {AuditLogEntry, ColumnPolicy, LifecycleData, LineageGraph, MaskingPolicy} from '@/api/types';
+import {ShieldCheck, ScanSearch, ScrollText, GitBranch, EyeOff, ShieldBan, Database as DbIcon, Building2, Network as NetworkIcon} from 'lucide-react';
+import type {AuditLogEntry, ColumnPolicy, FederationPeer, FederationResult, LifecycleData, LineageGraph, MaskingPolicy, TenantInfo} from '@/api/types';
 
 interface UserRow {
   username: string;
@@ -66,6 +66,45 @@ export function SecurityPage() {
   const [polRole, setPolRole] = useState('analyst');
   const [polTable, setPolTable] = useState('');
   const [polColumn, setPolColumn] = useState('');
+
+  // M6: 多租户 / 联邦接入
+  const [tenantCode, setTenantCode] = useState('');
+  const [tenantName, setTenantName] = useState('');
+  const [peerName, setPeerName] = useState('');
+  const [peerUrl, setPeerUrl] = useState('');
+  const [peerToken, setPeerToken] = useState('');
+  const tenants = useQuery({queryKey: ['tenants'], queryFn: api.tenants});
+  const addTenant = useMutation({
+    mutationFn: () => api.createTenant(tenantCode.trim(), tenantName.trim()),
+    onSuccess: () => {
+      toast({body: '租户已创建'});
+      setTenantCode('');
+      setTenantName('');
+      qc.invalidateQueries({queryKey: ['tenants']});
+    },
+    onError: (e) => toast({body: e instanceof Error ? e.message : '创建失败', type: 'error'}),
+  });
+  const toggleTenant = useMutation({
+    mutationFn: ({code, status}: {code: string; status: string}) => api.setTenantStatus(code, status),
+    onSuccess: () => qc.invalidateQueries({queryKey: ['tenants']}),
+  });
+  const peers = useQuery({queryKey: ['federation-peers'], queryFn: api.federationPeers});
+  const addPeer = useMutation({
+    mutationFn: () => api.createFederationPeer(peerName.trim(), peerUrl.trim(), peerToken.trim() || undefined),
+    onSuccess: () => {
+      toast({body: '联邦实例已注册'});
+      setPeerName('');
+      setPeerUrl('');
+      setPeerToken('');
+      qc.invalidateQueries({queryKey: ['federation-peers']});
+    },
+    onError: (e) => toast({body: e instanceof Error ? e.message : '注册失败', type: 'error'}),
+  });
+  const removePeer = useMutation({
+    mutationFn: (id: number) => api.deleteFederationPeer(id),
+    onSuccess: () => qc.invalidateQueries({queryKey: ['federation-peers']}),
+  });
+  const fedSearch = useQuery({queryKey: ['federation-search'], queryFn: () => api.federationSearch(), enabled: false});
 
   const addPolicy = useMutation({
     mutationFn: () => api.createColumnPolicy(polRole, polColumn, polTable ? Number(polTable) : undefined),
@@ -327,6 +366,77 @@ export function SecurityPage() {
             </VStack>
           ) : (
             <Text type="supporting"><span className="muted">暂无数据源, 接入后在此设置保留期</span></Text>
+          )}
+        </VStack>
+      </Card>
+
+      {/* M6: 多租户 */}
+      <Card variant="muted" style={{padding: 20}}>
+        <VStack gap={3}>
+          <HStack gap={2} vAlign="center">
+            <Building2 size={18} />
+            <Text weight="semibold">多租户 ({tenants.data?.length ?? 0})</Text>
+            <Text type="supporting"><span className="muted">数据接入层按租户硬隔离, 越权访问视为不存在; 账号归属由 BUILTIN_USERS 第 4 段声明</span></Text>
+          </HStack>
+          <HStack gap={2} vAlign="end" wrap="wrap">
+            <TextInput label="租户编码" value={tenantCode} onChange={setTenantCode} placeholder="如 acme" style={{minWidth: 160}} />
+            <TextInput label="租户名称" value={tenantName} onChange={setTenantName} placeholder="如 Acme 集团" style={{minWidth: 180}} />
+            <Button label="新建租户" variant="primary" isLoading={addTenant.isPending} isDisabled={!tenantCode || !tenantName} onClick={() => addTenant.mutate()} />
+          </HStack>
+          {(tenants.data ?? []).length > 0 ? (
+            <VStack gap={2}>
+              {(tenants.data as TenantInfo[]).map((t) => (
+                <HStack key={t.id} gap={2} vAlign="center">
+                  <Badge label={t.code} variant="info" />
+                  <Text weight="semibold">{t.name}</Text>
+                  <Badge label={t.status} variant={t.status === 'active' ? 'success' : 'neutral'} />
+                  <Button label={t.status === 'active' ? '停用' : '启用'} size="sm" variant="ghost" onClick={() => toggleTenant.mutate({code: t.code, status: t.status === 'active' ? 'disabled' : 'active'})} />
+                </HStack>
+              ))}
+            </VStack>
+          ) : (
+            <Text type="supporting"><span className="muted">暂无租户, 默认账号归属 default 租户</span></Text>
+          )}
+        </VStack>
+      </Card>
+
+      {/* M6: 联邦接入 */}
+      <Card variant="muted" style={{padding: 20}}>
+        <VStack gap={3}>
+          <HStack gap={2} vAlign="center">
+            <NetworkIcon size={18} />
+            <Text weight="semibold">联邦接入 ({peers.data?.length ?? 0})</Text>
+            <Text type="supporting"><span className="muted">注册远端 BudaiAgentMesh 实例, 目录/数据跨实例透传可查</span></Text>
+          </HStack>
+          <HStack gap={2} vAlign="end" wrap="wrap">
+            <TextInput label="实例名称" value={peerName} onChange={setPeerName} placeholder="如 华东节点" style={{minWidth: 140}} />
+            <TextInput label="地址" value={peerUrl} onChange={setPeerUrl} placeholder="如 http://peer:8000" style={{minWidth: 220}} />
+            <TextInput label="令牌 (可选)" value={peerToken} onChange={setPeerToken} placeholder="远端访问令牌" style={{minWidth: 180}} />
+            <Button label="注册实例" variant="primary" isLoading={addPeer.isPending} isDisabled={!peerName || !peerUrl} onClick={() => addPeer.mutate()} />
+          </HStack>
+          {(peers.data ?? []).length > 0 ? (
+            <VStack gap={2}>
+              {(peers.data as FederationPeer[]).map((p) => (
+                <HStack key={p.id} gap={2} vAlign="center">
+                  <Badge label={p.name} variant="blue" />
+                  <Text className="mono muted">{p.base_url}</Text>
+                  <Badge label={p.status} variant={p.status === 'active' ? 'success' : 'neutral'} />
+                  <Button label="删除" size="sm" variant="ghost" onClick={() => removePeer.mutate(p.id)} />
+                </HStack>
+              ))}
+              <Button label="联邦检索" size="sm" variant="ghost" isLoading={fedSearch.isFetching} onClick={() => fedSearch.refetch()} />
+              {(fedSearch.data ?? []).length > 0 && (
+                <VStack gap={1}>
+                  {(fedSearch.data as FederationResult[]).map((r, i) => (
+                    <Text key={i} type="supporting" className="muted">
+                      {r.ok ? `[${r.peer}] 命中 ${(r.data ?? []).length} 张表` : `[${r.peer}] ${r.error}`}
+                    </Text>
+                  ))}
+                </VStack>
+              )}
+            </VStack>
+          ) : (
+            <Text type="supporting"><span className="muted">暂无联邦实例, 注册后可跨实例检索目录</span></Text>
           )}
         </VStack>
       </Card>

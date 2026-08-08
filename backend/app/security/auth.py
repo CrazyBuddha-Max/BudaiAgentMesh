@@ -21,26 +21,34 @@ _bearer = HTTPBearer(auto_error=False)
 class TokenPayload(BaseModel):
     sub: str
     role: str
+    tenant: str = "default"
     exp: dt.datetime
 
 
 class CurrentUser(BaseModel):
     username: str
     role: str
+    tenant: str = "default"  # M6 多租户: 资源隔离维度, 旧 token 缺省归 default
 
     @property
     def level(self) -> int:
         return ROLE_LEVELS.get(self.role, 0)
 
 
-def _builtin_users() -> dict[str, str]:
-    """解析内置账号: 用户名 -> (密码, 角色)."""
-    users: dict[str, tuple[str, str]] = {}
+def _builtin_users() -> dict[str, tuple[str, str, str]]:
+    """解析内置账号: 用户名 -> (密码, 角色, 租户).
+
+    兼容两种格式: username:password:role (M1~M5, 归 default 租户)
+                     username:password:role:tenant (M6 多租户)
+    """
+    users: dict[str, tuple[str, str, str]] = {}
     for item in settings.builtin_users.split(","):
         parts = item.strip().split(":")
         if len(parts) == 3:
-            users[parts[0]] = (parts[1], parts[2])
-    return users  # type: ignore[return-value]
+            users[parts[0]] = (parts[1], parts[2], "default")
+        elif len(parts) == 4:
+            users[parts[0]] = (parts[1], parts[2], parts[3])
+    return users
 
 
 def authenticate(username: str, password: str) -> CurrentUser:
@@ -48,7 +56,7 @@ def authenticate(username: str, password: str) -> CurrentUser:
     record = users.get(username)
     if record is None or record[0] != password:
         raise AuthError("用户名或密码错误")
-    return CurrentUser(username=username, role=record[1])
+    return CurrentUser(username=username, role=record[1], tenant=record[2])
 
 
 def create_token(user: CurrentUser) -> str:
@@ -56,6 +64,7 @@ def create_token(user: CurrentUser) -> str:
     payload = TokenPayload(
         sub=user.username,
         role=user.role,
+        tenant=user.tenant,
         exp=now + dt.timedelta(minutes=settings.jwt_expire_minutes),
     )
     return jwt.encode(payload.model_dump(mode="python"), settings.jwt_secret, algorithm=settings.jwt_algorithm)
@@ -64,7 +73,11 @@ def create_token(user: CurrentUser) -> str:
 def _decode_token(token: str) -> CurrentUser:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-        return CurrentUser(username=payload["sub"], role=payload["role"])
+        return CurrentUser(
+            username=payload["sub"],
+            role=payload["role"],
+            tenant=payload.get("tenant", "default"),  # 旧 token 无 tenant 声明, 归 default
+        )
     except jwt.PyJWTError as exc:
         raise AuthError("令牌无效或已过期") from exc
 

@@ -11,9 +11,9 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-async def test_source(session: AsyncSession, source_id: int) -> str:
+async def test_source(session: AsyncSession, source_id: int, tenant: str = "default") -> str:
     """连接校验: 通过则置为 active, 失败置为 error 并抛出异常."""
-    source = await get_source(session, source_id)
+    source = await get_source(session, source_id, tenant=tenant)
     try:
         connector = registry.build(source.source_type, source_params(source))
         await connector.test_connection()
@@ -27,9 +27,11 @@ async def test_source(session: AsyncSession, source_id: int) -> str:
         raise
 
 
-async def ingest_source(session: AsyncSession, source_id: int) -> models.IngestionRun:
+async def ingest_source(
+    session: AsyncSession, source_id: int, tenant: str = "default"
+) -> models.IngestionRun:
     """执行一次采集: 增量检测 -> Schema 注册 + 质量初检 + 目录落库."""
-    source = await get_source(session, source_id)
+    source = await get_source(session, source_id, tenant=tenant)
     run = models.IngestionRun(source_id=source_id, status="running")
     session.add(run)
     await session.commit()

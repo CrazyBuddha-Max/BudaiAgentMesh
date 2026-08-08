@@ -28,6 +28,7 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 async def init_db() -> None:
     """建表 + 轻量迁移 (生产环境建议改用 Alembic)."""
     from app.access import models as _access_models  # noqa: F401  确保模型已注册
+    from app.access.federated import FederatedPeer  # noqa: F401  联邦对等实例
     from app.agents import models as _agent_models  # noqa: F401  确保模型已注册
     from app.feedback.feedback import TaskFeedback  # noqa: F401  反馈闭环
     from app.knowledge import models as _knowledge_models  # noqa: F401  确保模型已注册
@@ -35,6 +36,7 @@ async def init_db() -> None:
     from app.security.acl import ColumnPolicy  # noqa: F401  列级权限
     from app.security.audit import AuditLog  # noqa: F401  审计日志
     from app.security.lineage import LineageEdge  # noqa: F401  数据血缘
+    from app.security.tenant import Tenant  # noqa: F401  多租户
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -46,6 +48,7 @@ _ADD_COLUMNS: dict[str, list[tuple[str, str]]] = {
     "data_sources": [
         ("retention_days", "INTEGER"),  # M5 生命周期
         ("watermark", "VARCHAR(256)"),  # M6 增量采集水位线
+        ("tenant_id", "VARCHAR(64)"),  # M6 多租户
     ],
     "agent_tasks": [("collaborators", "JSON")],  # M4 协作 Agent
 }

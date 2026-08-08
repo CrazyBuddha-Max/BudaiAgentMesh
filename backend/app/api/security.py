@@ -78,6 +78,42 @@ async def sso_callback(code: str, state: str, session: AsyncSession = SessionDep
     return LoginResponse(access_token=create_token(user), user=user)
 
 
+# ---------- 多租户 (M6) ----------
+
+@router.get("/tenants")
+async def tenants(user: AdminDep, session: AsyncSession = SessionDep) -> list[dict]:
+    """租户列表 (admin): 多租户管理."""
+    from app.security.tenant import list_tenants
+
+    rows = await list_tenants(session)
+    return [
+        {"id": t.id, "code": t.code, "name": t.name, "status": t.status, "created_at": t.created_at.isoformat()}
+        for t in rows
+    ]
+
+
+@router.post("/tenants", status_code=201)
+async def create_tenant(
+    payload: dict, user: AdminDep, session: AsyncSession = SessionDep
+) -> dict:
+    """新建租户 (admin): {code, name}."""
+    from app.security.tenant import create_tenant
+
+    tenant = await create_tenant(session, code=payload.get("code", ""), name=payload.get("name", ""))
+    return {"id": tenant.id, "code": tenant.code, "name": tenant.name, "status": tenant.status}
+
+
+@router.patch("/tenants/{code}")
+async def patch_tenant(
+    code: str, payload: dict, user: AdminDep, session: AsyncSession = SessionDep
+) -> dict:
+    """更新租户状态 (admin): {status: active|disabled}."""
+    from app.security.tenant import set_tenant_status
+
+    tenant = await set_tenant_status(session, code, payload.get("status", "active"))
+    return {"id": tenant.id, "code": tenant.code, "name": tenant.name, "status": tenant.status}
+
+
 # ---------- 审计 ----------
 
 class AuditLogOut(BaseModel):

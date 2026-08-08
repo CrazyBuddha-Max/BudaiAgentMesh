@@ -16,6 +16,7 @@ class DataSource(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True)  # M6 多租户隔离维度
     source_type: Mapped[str] = mapped_column(String(32), index=True)  # postgres/mysql/csv
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 

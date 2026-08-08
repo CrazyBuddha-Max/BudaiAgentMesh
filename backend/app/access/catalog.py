@@ -10,21 +10,31 @@ from app.access.schemas import SourceCreate, SourceUpdate
 from app.core.exceptions import NotFoundError
 
 
-async def list_sources(session: AsyncSession) -> list[models.DataSource]:
-    result = await session.execute(select(models.DataSource).order_by(models.DataSource.created_at.desc()))
+async def list_sources(session: AsyncSession, tenant: str = "default") -> list[models.DataSource]:
+    stmt = (
+        select(models.DataSource)
+        .where(models.DataSource.tenant_id == tenant)
+        .order_by(models.DataSource.created_at.desc())
+    )
+    result = await session.execute(stmt)
     return list(result.scalars().all())
 
 
-async def get_source(session: AsyncSession, source_id: int) -> models.DataSource:
+async def get_source(session: AsyncSession, source_id: int, tenant: str = "default") -> models.DataSource:
     source = await session.get(models.DataSource, source_id)
     if source is None:
+        raise NotFoundError(f"数据源不存在: {source_id}")
+    if source.tenant_id != tenant:  # M6 多租户: 越权访问视为不存在
         raise NotFoundError(f"数据源不存在: {source_id}")
     return source
 
 
-async def create_source(session: AsyncSession, payload: SourceCreate) -> models.DataSource:
+async def create_source(
+    session: AsyncSession, payload: SourceCreate, tenant: str = "default"
+) -> models.DataSource:
     source = models.DataSource(
         name=payload.name,
+        tenant_id=tenant,
         source_type=payload.source_type,
         description=payload.description,
         host=payload.host,
@@ -43,9 +53,9 @@ async def create_source(session: AsyncSession, payload: SourceCreate) -> models.
 
 
 async def update_source(
-    session: AsyncSession, source_id: int, payload: SourceUpdate
+    session: AsyncSession, source_id: int, payload: SourceUpdate, tenant: str = "default"
 ) -> models.DataSource:
-    source = await get_source(session, source_id)
+    source = await get_source(session, source_id, tenant=tenant)
     data = payload.model_dump(exclude_unset=True)
     if "password" in data:
         source.password_enc = encrypt_secret(data.pop("password"))
@@ -58,8 +68,8 @@ async def update_source(
     return source
 
 
-async def delete_source(session: AsyncSession, source_id: int) -> None:
-    source = await get_source(session, source_id)
+async def delete_source(session: AsyncSession, source_id: int, tenant: str = "default") -> None:
+    source = await get_source(session, source_id, tenant=tenant)
     await session.delete(source)
     await session.commit()
 
@@ -82,10 +92,15 @@ async def list_tables(
     source_id: int | None = None,
     keyword: str | None = None,
     limit: int = 100,
+    tenant: str = "default",
 ) -> list[models.CatalogTable]:
     stmt = select(models.CatalogTable).order_by(models.CatalogTable.table_name).limit(limit)
     if source_id is not None:
         stmt = stmt.where(models.CatalogTable.source_id == source_id)
+    else:
+        # M6 多租户: 未指定数据源时仅返回本租户目录 (通过数据源归属过滤)
+        tenant_sources = select(models.DataSource.id).where(models.DataSource.tenant_id == tenant)
+        stmt = stmt.where(models.CatalogTable.source_id.in_(tenant_sources))
     if keyword:
         like = f"%{keyword}%"
         stmt = stmt.where(
@@ -103,12 +118,21 @@ async def get_table(session: AsyncSession, table_id: int) -> models.CatalogTable
 
 
 async def search_columns(
-    session: AsyncSession, keyword: str, limit: int = 50
+    session: AsyncSession, keyword: str, limit: int = 50, tenant: str = "default"
 ) -> list[models.CatalogColumn]:
     like = f"%{keyword}%"
+    # M6 多租户: 仅检索本租户数据源下的列 (经目录表关联)
+    tenant_tables = select(models.CatalogTable.id).where(
+        models.CatalogTable.source_id.in_(
+            select(models.DataSource.id).where(models.DataSource.tenant_id == tenant)
+        )
+    )
     stmt = (
         select(models.CatalogColumn)
-        .where(models.CatalogColumn.column_name.ilike(like))
+        .where(
+            models.CatalogColumn.column_name.ilike(like),
+            models.CatalogColumn.table_id.in_(tenant_tables),
+        )
         .order_by(models.CatalogColumn.column_name)
         .limit(limit)
     )
@@ -116,12 +140,22 @@ async def search_columns(
     return list(result.scalars().all())
 
 
-async def catalog_stats(session: AsyncSession) -> dict:
-    """目录总览统计, 供数据资产门户首页展示."""
-    sources = await session.scalar(select(func.count(models.DataSource.id))) or 0
-    tables = await session.scalar(select(func.count(models.CatalogTable.id))) or 0
-    columns = await session.scalar(select(func.count(models.CatalogColumn.id))) or 0
-    runs = await session.scalar(select(func.count(models.IngestionRun.id))) or 0
+async def catalog_stats(session: AsyncSession, tenant: str = "default") -> dict:
+    """目录总览统计 (按租户隔离), 供数据资产门户首页展示."""
+    tenant_sources = select(models.DataSource.id).where(models.DataSource.tenant_id == tenant)
+    tenant_tables = select(models.CatalogTable.id).where(models.CatalogTable.source_id.in_(tenant_sources))
+    sources = await session.scalar(
+        select(func.count(models.DataSource.id)).where(models.DataSource.tenant_id == tenant)
+    ) or 0
+    tables = await session.scalar(
+        select(func.count(models.CatalogTable.id)).where(models.CatalogTable.source_id.in_(tenant_sources))
+    ) or 0
+    columns = await session.scalar(
+        select(func.count(models.CatalogColumn.id)).where(models.CatalogColumn.table_id.in_(tenant_tables))
+    ) or 0
+    runs = await session.scalar(
+        select(func.count(models.IngestionRun.id)).where(models.IngestionRun.source_id.in_(tenant_sources))
+    ) or 0
     return {
         "sources": sources,
         "tables": tables,

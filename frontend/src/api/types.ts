@@ -294,3 +294,27 @@ export interface FeedbackStats {
   avg_rating: number;
   by_rating: Record<string, number>;
 }
+
+// M6: 多租户 / 联邦接入
+export interface TenantInfo {
+  id: number;
+  code: string;
+  name: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface FederationPeer {
+  id: number;
+  name: string;
+  base_url: string;
+  status: string;
+  created_at?: string;
+}
+
+export interface FederationResult {
+  ok: boolean;
+  peer: string;
+  data?: Array<Record<string, unknown>>;
+  error?: string;
+}
