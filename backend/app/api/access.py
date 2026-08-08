@@ -1,6 +1,9 @@
 """接入层 API: 数据源 / 采集 / 目录浏览."""
 
-from fastapi import APIRouter, Depends, Query
+import os
+import time
+
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.access import models
@@ -27,11 +30,17 @@ from app.access.schemas import (
     TableOut,
 )
 from app.core.database import get_session
+from app.core.exceptions import BizError
 from app.security.auth import AdminDep, AnalystDep, CurrentUserDep
 
 router = APIRouter()
 
 SessionDep = Depends(get_session)
+
+# 上传文件落盘目录 (CSV 接入)
+UPLOAD_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data", "uploads"
+)
 
 _CONNECTOR_META = {
     "postgres": ("PostgreSQL", "关系型数据库, 支持增量指纹检测 (M6)"),
@@ -57,6 +66,30 @@ async def create(
     session: AsyncSession = SessionDep,
 ) -> models.DataSource:
     return await create_source(session, payload, tenant=user.tenant)
+
+
+@router.post("/sources/upload", response_model=SourceOut, status_code=201)
+async def create_with_file(
+    name: str = Form(...),
+    description: str | None = Form(None),
+    file: UploadFile = File(...),
+    user: AnalystDep = ...,
+    session: AsyncSession = SessionDep,
+) -> models.DataSource:
+    """CSV 上传接入 (multipart): 文件保存到服务器后注册为数据源, 免填写路径."""
+    fname = (file.filename or "").replace("\\", "/").split("/")[-1]
+    if not fname.lower().endswith(".csv"):
+        raise BizError("仅支持 CSV 文件上传")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    dest = os.path.join(UPLOAD_DIR, f"{int(time.time())}_{fname}")
+    content = await file.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+    return await create_source(
+        session,
+        SourceCreate(name=name, source_type="csv", description=description, file_path=dest),
+        tenant=user.tenant,
+    )
 
 
 @router.get("/sources/{source_id}", response_model=SourceOut)

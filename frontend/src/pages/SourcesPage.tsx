@@ -10,6 +10,7 @@ import {IconButton} from '@astryxdesign/core/IconButton';
 import {Card} from '@astryxdesign/core/Card';
 import {Text} from '@astryxdesign/core/Text';
 import {TextInput} from '@astryxdesign/core/TextInput';
+import {FileInput} from '@astryxdesign/core/FileInput';
 import {VStack} from '@astryxdesign/core/VStack';
 import {HStack} from '@astryxdesign/core/HStack';
 import {SegmentedControl, SegmentedControlItem} from '@astryxdesign/core/SegmentedControl';
@@ -38,6 +39,8 @@ export function SourcesPage() {
     password: '',
     file_path: '',
   });
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const isCsv = form.source_type === 'csv';
 
   const sources = useQuery({queryKey: ['sources'], queryFn: api.listSources});
   const connectors = useQuery({queryKey: ['connectors'], queryFn: api.connectors});
@@ -74,28 +77,29 @@ export function SourcesPage() {
 
   const createMutation = useMutation({
     mutationFn: () =>
-      api.createSource({
-        name: form.name,
-        source_type: form.source_type,
-        description: form.description || null,
-        host: form.host || null,
-        port: form.port ? Number(form.port) : null,
-        database: form.database || null,
-        schema_name: form.schema_name || 'public',
-        username: form.username || null,
-        password: form.password || null,
-        file_path: form.file_path || null,
-      }),
+      isCsv && csvFile
+        ? api.createCsvSource(form.name, form.description || '', csvFile)
+        : api.createSource({
+            name: form.name,
+            source_type: form.source_type,
+            description: form.description || null,
+            host: form.host || null,
+            port: form.port ? Number(form.port) : null,
+            database: form.database || null,
+            schema_name: form.schema_name || 'public',
+            username: form.username || null,
+            password: form.password || null,
+            file_path: form.file_path || null,
+          }),
     onSuccess: (source) => {
       toast({body: `数据源「${source.name}」已创建`});
       setShowCreate(false);
       setForm({name: '', source_type: 'csv', description: '', host: '', port: '', database: '', schema_name: 'public', username: '', password: '', file_path: ''});
+      setCsvFile(null);
       qc.invalidateQueries({queryKey: ['sources']});
     },
     onError: (e) => toast({body: e instanceof Error ? e.message : '创建失败', type: 'error'}),
   });
-
-  const isCsv = form.source_type === 'csv';
 
   const columns = [
     {key: 'name', header: '名称', width: proportional(1.8), renderCell: (r: DataSource) => (
@@ -181,7 +185,14 @@ export function SourcesPage() {
               <TextInput label="数据源名称" value={form.name} onChange={set('name')} isRequired description="全局唯一" />
               <TextInput label="描述" value={form.description} onChange={set('description')} />
               {isCsv ? (
-                <TextInput label="文件路径" value={form.file_path} onChange={set('file_path')} isRequired description="后端可访问的本地 CSV 路径" />
+                <FileInput
+                  label="CSV 文件"
+                  accept=".csv"
+                  value={csvFile}
+                  onChange={(f) => setCsvFile(f as File | null)}
+                  isRequired
+                  description="从电脑选择 CSV 文件上传"
+                />
               ) : (
                 <TextInput label="数据库名" value={form.database} onChange={set('database')} isRequired />
               )}
@@ -198,7 +209,7 @@ export function SourcesPage() {
                 label={createMutation.isPending ? '创建中...' : '创建数据源'}
                 variant="primary"
                 isLoading={createMutation.isPending}
-                isDisabled={!form.name || (isCsv ? !form.file_path : !form.database)}
+                isDisabled={!form.name || (isCsv ? !csvFile : !form.database)}
                 onClick={() => createMutation.mutate()}
               />
             </HStack>

@@ -171,3 +171,50 @@ async def test_federation_search_proxies_peers(monkeypatch):
 def select_safe(model):
     from sqlalchemy import select
     return select(model)
+
+
+# ---------- CSV 文件上传接入 (M6) ----------
+
+
+@pytest.mark.anyio
+async def test_csv_upload_creates_source(tmp_path):
+    """multipart 上传 CSV -> 数据源创建成功, file_path 指向落盘文件."""
+    async with await _client() as client:
+        admin_tok = await _login(client)
+        ah = _auth(admin_tok)
+
+        csv_content = b"id,region,amount\n1,east,10\n"
+        files = {"file": ("orders.csv", csv_content, "text/csv")}
+        resp = await client.post(
+            "/api/access/sources/upload",
+            data={"name": "上传源", "description": "multipart 上传"},
+            files=files,
+            headers=ah,
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["name"] == "上传源"
+        assert body["source_type"] == "csv"
+        assert body["file_path"] and body["file_path"].endswith("orders.csv")
+
+        # 列表可见
+        resp2 = await client.get("/api/access/sources", headers=ah)
+        assert any(s["name"] == "上传源" for s in resp2.json())
+
+        # 可采集
+        resp3 = await client.post(f"/api/access/sources/{body['id']}/ingest", headers=ah)
+        assert resp3.status_code == 200, resp3.text
+        assert resp3.json()["tables_found"] == 1
+
+
+@pytest.mark.anyio
+async def test_csv_upload_rejects_non_csv(tmp_path):
+    """非 CSV 文件上传被拒绝."""
+    async with await _client() as client:
+        admin_tok = await _login(client)
+        ah = _auth(admin_tok)
+        files = {"file": ("note.txt", b"hello", "text/plain")}
+        resp = await client.post(
+            "/api/access/sources/upload", data={"name": "bad"}, files=files, headers=ah
+        )
+        assert resp.status_code == 400, resp.text

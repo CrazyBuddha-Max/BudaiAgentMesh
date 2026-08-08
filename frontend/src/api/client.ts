@@ -46,10 +46,14 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token;
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> | undefined),
-  };
+  // multipart/form-data 时交给浏览器自动设置 boundary, 不可手动指定 Content-Type
+  const isForm = options.body instanceof FormData;
+  const headers: Record<string, string> = isForm
+    ? {}
+    : {
+        'Content-Type': 'application/json',
+        ...(options.headers as Record<string, string> | undefined),
+      };
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
@@ -92,6 +96,13 @@ export const api = {
   listSources: () => request<DataSource[]>('/access/sources'),
   createSource: (payload: Record<string, unknown>) =>
     request<DataSource>('/access/sources', {method: 'POST', body: JSON.stringify(payload)}),
+  createCsvSource: (name: string, description: string, file: File) => {
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('description', description);
+    formData.append('file', file);
+    return request<DataSource>('/access/sources/upload', {method: 'POST', body: formData});
+  },
   deleteSource: (id: number) => request<void>(`/access/sources/${id}`, {method: 'DELETE'}),
   testSource: (id: number) =>
     request<{source_id: number; status: string; message: string}>(`/access/sources/${id}/test`, {method: 'POST'}),
