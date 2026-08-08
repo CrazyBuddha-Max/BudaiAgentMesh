@@ -100,6 +100,16 @@ start_all.bat
 
 > 需要 Python 3.12 (勾选 Add to PATH) 与 Node.js (npm) 已安装。
 
+## 界面预览
+
+<img src="imgs/1.png" alt="1" width="700" />
+
+<img src="imgs/2.png" alt="2" width="700" />
+
+<img src="imgs/3.png" alt="3" width="700" />
+
+<img src="imgs/4.png" alt="4" width="700" />
+
 ## 快速开始 (手动分步)
 
 ```bat
