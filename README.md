@@ -9,6 +9,17 @@
 - **向下** 整合企业数据资产（数据库、消息、文件、API、SaaS、湖仓）
 - **向上** 赋能智能体（语义检索、工具调用、事件订阅、记忆注入、协作编排）
 
+## 界面预览
+
+<img src="imgs/1.png" alt="1" width="700" />
+
+<img src="imgs/2.png" alt="2" width="700" />
+
+<img src="imgs/3.png" alt="3" width="700" />
+
+<img src="imgs/4.png" alt="4" width="700" />
+
+
 ## 五大层次
 
 
@@ -100,15 +111,6 @@ start_all.bat
 
 > 需要 Python 3.12 (勾选 Add to PATH) 与 Node.js (npm) 已安装。
 
-## 界面预览
-
-<img src="imgs/1.png" alt="1" width="700" />
-
-<img src="imgs/2.png" alt="2" width="700" />
-
-<img src="imgs/3.png" alt="3" width="700" />
-
-<img src="imgs/4.png" alt="4" width="700" />
 
 ## 快速开始 (手动分步)
 
