@@ -51,8 +51,14 @@ _ADD_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("watermark", "VARCHAR(256)"),  # M6 增量采集水位线
         ("tenant_id", "VARCHAR(64)"),  # M6 多租户
     ],
-    "agent_tasks": [("collaborators", "JSON")],  # M4 协作 Agent
+    "agent_tasks": [
+        ("collaborators", "JSON"),  # M4 协作 Agent
+        ("tenant_id", "VARCHAR(64)"),  # M7 多租户
+    ],
     "agents": [("llm_provider_id", "INTEGER")],  # M7 绑定模型提供方
+    "knowledge_docs": [("tenant_id", "VARCHAR(64)")],  # M7 多租户
+    "metric_definitions": [("tenant_id", "VARCHAR(64)")],  # M7 多租户
+    "audit_logs": [("tenant_id", "VARCHAR(64)")],  # M7 多租户
 }
 
 

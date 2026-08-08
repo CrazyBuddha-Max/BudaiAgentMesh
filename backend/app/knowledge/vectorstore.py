@@ -253,12 +253,26 @@ async def retrieve(
     top_k: int = 5,
     embedder: Embedder | None = None,
     min_score: float = 0.0,
+    tenant: str = "default",
 ) -> list[RetrieveHit]:
     """语义检索 (兼容入口): 查询向量化 -> 按配置后端检索 -> Top-K.
 
     签名自 M2 起保持稳定, 后端切换 (pgvector/Milvus) 对调用方透明.
+    M7: 按租户过滤知识切块.
     """
     embedder = embedder or get_embedder()
     query_vec = embedder.embed(query)
     backend = get_backend()
-    return await backend.retrieve(session, query_vec, top_k=top_k, min_score=min_score)
+    hits = await backend.retrieve(session, query_vec, top_k=top_k, min_score=min_score)
+    if tenant == "default":
+        return hits
+    # 多租户: 仅保留本租户切块 (按 tenant_id 回查过滤)
+    from sqlalchemy import select as _select
+
+    from app.knowledge.models import KnowledgeChunk
+
+    rows = await session.execute(
+        _select(KnowledgeChunk.id).where(KnowledgeChunk.tenant_id == tenant)
+    )
+    allowed = {r[0] for r in rows}
+    return [h for h in hits if h.chunk_id in allowed]

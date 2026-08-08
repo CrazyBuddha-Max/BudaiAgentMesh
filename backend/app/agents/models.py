@@ -15,6 +15,7 @@ class Agent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True)  # M7 多租户
     llm_provider_id: Mapped[int | None] = mapped_column(
         ForeignKey("llm_providers.id", ondelete="SET NULL"), nullable=True
     )  # 绑定的模型提供方 (M7); 空 = 用默认提供方
@@ -35,6 +36,7 @@ class AgentTask(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     agent_id: Mapped[int] = mapped_column(ForeignKey("agents.id", ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True)  # M7 多租户
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     objective: Mapped[str] = mapped_column(Text)
     collaborators: Mapped[list] = mapped_column(JSON, default=list)  # 协作 Agent ids (M3)

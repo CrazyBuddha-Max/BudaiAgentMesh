@@ -20,9 +20,9 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
-async def get_agent(session: AsyncSession, agent_id: int) -> Agent:
+async def get_agent(session: AsyncSession, agent_id: int, tenant: str = "default") -> Agent:
     agent = await session.get(Agent, agent_id)
-    if agent is None:
+    if agent is None or agent.tenant_id != tenant:
         raise NotFoundError(f"Agent 不存在: {agent_id}")
     return agent
 
@@ -33,13 +33,15 @@ async def create_task(
     objective: str,
     title: str | None = None,
     collaborators: list[int] | None = None,
+    tenant: str = "default",
 ) -> AgentTask:
     """创建任务: 主控 Agent + 可选协作 Agent 列表."""
-    await get_agent(session, agent_id)
+    await get_agent(session, agent_id, tenant=tenant)
     for cid in collaborators or []:
-        await get_agent(session, cid)
+        await get_agent(session, cid, tenant=tenant)
     task = AgentTask(
         agent_id=agent_id,
+        tenant_id=tenant,
         objective=objective,
         title=title or objective[:40],
         status="pending",
@@ -61,13 +63,13 @@ def _pick_executor(main_agent: Agent, collaborators: list[Agent], capability: st
     return main_agent
 
 
-async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
+async def run_task(session: AsyncSession, task_id: int, tenant: str = "default") -> AgentTask:
     """执行任务: 并行分支独立会话, 事件直落库 + 发布总线."""
     from app.security.audit import record_audit
 
-    task = await get_task(session, task_id)
-    main_agent = await get_agent(session, task.agent_id)
-    collaborators = [await get_agent(session, cid) for cid in (task.collaborators or [])]
+    task = await get_task(session, task_id, tenant=tenant)
+    main_agent = await get_agent(session, task.agent_id, tenant=tenant)
+    collaborators = [await get_agent(session, cid, tenant=tenant) for cid in (task.collaborators or [])]
     team = [main_agent, *collaborators]
     team_names = " + ".join(a.name for a in team)
 
@@ -282,7 +284,7 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
         task.finished_at = dt.datetime.now(dt.UTC)
         await session.commit()
         await emit(session, "completion", writer.id, {"status": "succeeded"})
-        await record_audit(f"agent:{reporter.name}", "task.run", "task", task.id, {"objective": task.objective})
+        await record_audit(f"agent:{reporter.name}", "task.run", "task", task.id, {"objective": task.objective}, tenant=tenant)
     except Exception as exc:
         logger.exception("任务执行失败 task_id=%s", task.id)
         task.status = "failed"
@@ -314,28 +316,37 @@ def _summarize(result) -> str:
     return str(result)[:200]
 
 
-async def get_task(session: AsyncSession, task_id: int) -> AgentTask:
+async def get_task(session: AsyncSession, task_id: int, tenant: str = "default") -> AgentTask:
     task = await session.get(AgentTask, task_id)
-    if task is None:
+    if task is None or task.tenant_id != tenant:
         raise NotFoundError(f"任务不存在: {task_id}")
     return task
 
 
-async def list_tasks(session: AsyncSession, limit: int = 50) -> list[AgentTask]:
-    await _mark_stale_running(session)  # 修正因进程重启/中断而卡死的任务
-    stmt = select(AgentTask).order_by(AgentTask.created_at.desc()).limit(limit)
+async def list_tasks(session: AsyncSession, limit: int = 50, tenant: str = "default") -> list[AgentTask]:
+    await _mark_stale_running(session, tenant=tenant)  # 修正因进程重启/中断而卡死的任务
+    stmt = (
+        select(AgentTask)
+        .where(AgentTask.tenant_id == tenant)
+        .order_by(AgentTask.created_at.desc())
+        .limit(limit)
+    )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
 
-async def _mark_stale_running(session: AsyncSession) -> None:
+async def _mark_stale_running(session: AsyncSession, tenant: str = "default") -> None:
     """把长时间停留在 running 的任务标记为 failed (执行被中断, 如进程重启/LLM 超时)."""
     from sqlalchemy import update
 
     cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(minutes=5)
     await session.execute(
         update(AgentTask)
-        .where(AgentTask.status == "running", AgentTask.created_at < cutoff)
+        .where(
+            AgentTask.status == "running",
+            AgentTask.tenant_id == tenant,
+            AgentTask.created_at < cutoff,
+        )
         .values(status="failed", error="执行中断 (进程重启或超时), 请重新发起", finished_at=dt.datetime.now(dt.UTC))
     )
     await session.commit()

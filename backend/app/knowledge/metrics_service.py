@@ -28,9 +28,18 @@ from app.knowledge.metrics_schemas import (
 
 
 async def list_metrics(
-    session: AsyncSession, keyword: str | None = None, status: str | None = None, limit: int = 200
+    session: AsyncSession,
+    keyword: str | None = None,
+    status: str | None = None,
+    limit: int = 200,
+    tenant: str = "default",
 ) -> list[MetricDefinition]:
-    stmt = select(MetricDefinition).order_by(MetricDefinition.created_at.desc()).limit(limit)
+    stmt = (
+        select(MetricDefinition)
+        .where(MetricDefinition.tenant_id == tenant)
+        .order_by(MetricDefinition.created_at.desc())
+        .limit(limit)
+    )
     if keyword:
         like = f"%{keyword}%"
         stmt = stmt.where(
@@ -46,15 +55,15 @@ async def list_metrics(
     return list(result.scalars().all())
 
 
-async def get_metric(session: AsyncSession, metric_id: int) -> MetricDefinition:
+async def get_metric(session: AsyncSession, metric_id: int, tenant: str = "default") -> MetricDefinition:
     metric = await session.get(MetricDefinition, metric_id)
-    if metric is None:
+    if metric is None or metric.tenant_id != tenant:
         raise NotFoundError(f"指标不存在: {metric_id}")
     return metric
 
 
-async def create_metric(session: AsyncSession, payload) -> MetricDefinition:
-    table = await get_table(session, payload.table_id)
+async def create_metric(session: AsyncSession, payload, tenant: str = "default") -> MetricDefinition:
+    table = await get_table(session, payload.table_id, tenant=tenant)
     column_names = {c.column_name for c in table.columns}
 
     # 表达式白名单校验: 引用的列必须已注册
@@ -70,6 +79,7 @@ async def create_metric(session: AsyncSession, payload) -> MetricDefinition:
 
     metric = MetricDefinition(
         name=payload.name,
+        tenant_id=tenant,
         display_name=payload.display_name,
         description=payload.description,
         table_id=payload.table_id,
@@ -91,8 +101,8 @@ async def create_metric(session: AsyncSession, payload) -> MetricDefinition:
     return metric
 
 
-async def delete_metric(session: AsyncSession, metric_id: int) -> None:
-    metric = await get_metric(session, metric_id)
+async def delete_metric(session: AsyncSession, metric_id: int, tenant: str = "default") -> None:
+    metric = await get_metric(session, metric_id, tenant=tenant)
     await session.delete(metric)
     await session.commit()
 
@@ -138,13 +148,14 @@ async def query_metric(
     request: MetricQueryRequest,
     actor: str | None = None,
     role: str | None = None,
+    tenant: str = "default",
 ) -> MetricQueryResult:
     from app.security.acl import denied_columns
     from app.security.audit import record_audit
     from app.security.lineage import record_lineage
     from app.security.masking import apply_masking, detect_sensitive_columns
 
-    metric = await get_metric(session, metric_id)
+    metric = await get_metric(session, metric_id, tenant=tenant)
     table = await get_table(session, metric.table_id)
     source = await get_source(session, table.source_id)
 

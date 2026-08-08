@@ -16,6 +16,7 @@ class MetricDefinition(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True)  # M7 多租户
     display_name: Mapped[str] = mapped_column(String(128))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     table_id: Mapped[int] = mapped_column(ForeignKey("catalog_tables.id", ondelete="CASCADE"), index=True)

@@ -41,7 +41,7 @@
 | 后端 API 端点  | 47 条路径 / 70+ 操作                        |
 | 数据模型表      | 16 张 (含租户/联邦对等实例)                   |
 | 前端页面       | 11 个 (新增问答工作台 / 大模型接入)          |
-| 自动化测试      | 49 项, 全部通过 (M7 新增大模型接入/Agent 绑定 5 项)  |
+| 自动化测试      | 54 项, 全部通过 (M7-2 新增知识/Agent/审计租户隔离 3 项)  |
 | MCP Server | /mcp/mcp (streamable-http), 4 个数据工具 |
 | 代码质量       | ruff 全绿, 前端 tsc+vite build 通过             |
 
@@ -170,7 +170,7 @@ docker compose up -d --build
   - [x] CSV 浏览器上传 (M6-7): multipart 上传落盘免填路径
 - [ ] **M7** (当前)
   - [x] 真实大模型接入 (M7-1): LLM 提供方管理面板 (OpenAI/DeepSeek/通义/Ollama), 密钥 Fernet 加密, Agent 绑定独立模型, 任务规划/汇总真实 LLM 调用, 知识入库真实向量化 (ProviderEmbedder)
-  - [ ] 多租户扩展到知识/Agent 层 (M7-2): 租户隔离覆盖知识文档 / Agent 任务 / 审计日志
+  - [x] 多租户扩展到知识/Agent 层 (M7-2): 知识文档/切块/指标语义/Agent/任务/审计日志均按 tenant 硬隔离, 越权 404
   - [ ] 真实 PostgreSQL 逻辑复制 CDC (M7-3) · Prometheus 指标暴露 (M7-4) · 联邦双向认证 (M7-5)
 
 ## 测试

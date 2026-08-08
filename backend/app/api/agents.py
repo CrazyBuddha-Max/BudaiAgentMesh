@@ -46,7 +46,9 @@ async def _agent_out(session: AsyncSession, agent: Agent) -> AgentOut:
 
 @router.get("", response_model=list[AgentOut])
 async def agents(user: CurrentUserDep, session: AsyncSession = SessionDep) -> list[AgentOut]:
-    result = await session.execute(select(Agent).order_by(Agent.created_at.desc()))
+    result = await session.execute(
+        select(Agent).where(Agent.tenant_id == user.tenant).order_by(Agent.created_at.desc())
+    )
     rows = list(result.scalars().all())
     return [await _agent_out(session, a) for a in rows]
 
@@ -76,6 +78,7 @@ async def create_from_template(
     agent = Agent(
         name=payload.get("name") or template.name,
         description=template.description,
+        tenant_id=user.tenant,
         llm_provider_id=payload.get("llm_provider_id"),
         capabilities=template.capabilities,
         tools=[],
@@ -106,6 +109,7 @@ async def create_agent(
     agent = Agent(
         name=payload.name,
         description=payload.description,
+        tenant_id=user.tenant,
         llm_provider_id=payload.llm_provider_id,
         capabilities=payload.capabilities,
         tools=payload.tools,
@@ -124,10 +128,11 @@ async def create_agent(
 
 @router.delete("/{agent_id}", status_code=204)
 async def remove_agent(agent_id: int, user: AnalystDep, session: AsyncSession = SessionDep) -> None:
-    agent = await session.get(Agent, agent_id)
-    if agent is not None:
-        await session.delete(agent)
-        await session.commit()
+    from app.agents.orchestration import get_agent
+
+    agent = await get_agent(session, agent_id, tenant=user.tenant)
+    await session.delete(agent)
+    await session.commit()
 
 
 @router.patch("/{agent_id}", response_model=AgentOut)
@@ -137,7 +142,7 @@ async def patch_agent(
     """编辑 Agent (M7): 名称/描述/绑定的模型提供方/状态/能力."""
     from app.agents.orchestration import get_agent
 
-    agent = await get_agent(session, agent_id)
+    agent = await get_agent(session, agent_id, tenant=user.tenant)
     if "llm_provider_id" in payload:
         provider_id = payload.get("llm_provider_id")
         if provider_id is not None:
@@ -163,25 +168,25 @@ async def tools(user: CurrentUserDep, session: AsyncSession = SessionDep) -> lis
 async def create_agent_task(
     agent_id: int, payload: TaskCreate, user: AnalystDep, session: AsyncSession = SessionDep
 ):
-    task = await create_task(session, agent_id, payload.objective, payload.title, payload.collaborators)
-    return await get_task(session, task.id)
+    task = await create_task(session, agent_id, payload.objective, payload.title, payload.collaborators, tenant=user.tenant)
+    return await get_task(session, task.id, tenant=user.tenant)
 
 
 @router.get("/tasks", response_model=list[TaskOut])
 async def tasks(user: CurrentUserDep, limit: int = Query(50, le=200), session: AsyncSession = SessionDep):
-    return await list_tasks(session, limit)
+    return await list_tasks(session, limit, tenant=user.tenant)
 
 
 @router.get("/tasks/{task_id}", response_model=TaskOut)
 async def task_detail(task_id: int, user: CurrentUserDep, session: AsyncSession = SessionDep):
-    return await get_task(session, task_id)
+    return await get_task(session, task_id, tenant=user.tenant)
 
 
 @router.post("/tasks/{task_id}/run", response_model=TaskOut)
 async def run_agent_task(task_id: int, user: AnalystDep, session: AsyncSession = SessionDep):
     """执行任务: 知识检索 -> 目录检索 -> 数据采样 -> LLM 规划/汇总, 事件全程留痕."""
-    await run_task(session, task_id)
-    return await get_task(session, task_id)  # 重新拉取, 保证 events 完整
+    await run_task(session, task_id, tenant=user.tenant)
+    return await get_task(session, task_id, tenant=user.tenant)  # 重新拉取, 保证 events 完整
 
 
 # ---------- 大模型接入 (M7) ----------

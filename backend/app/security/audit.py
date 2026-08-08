@@ -18,6 +18,7 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True)  # M7 多租户
     actor: Mapped[str] = mapped_column(String(128), index=True)
     action: Mapped[str] = mapped_column(String(64), index=True)
     target_type: Mapped[str] = mapped_column(String(32), default="")
@@ -32,6 +33,7 @@ async def record_audit(
     target_type: str = "",
     target_id: Any = None,
     detail: dict | None = None,
+    tenant: str = "default",
 ) -> None:
     """记录审计日志: 独立会话写入, 与业务事务解耦, 失败不影响主流程."""
     try:
@@ -40,6 +42,7 @@ async def record_audit(
         async with SessionLocal() as session:
             session.add(
                 AuditLog(
+                    tenant_id=tenant,
                     actor=actor,
                     action=action,
                     target_type=target_type,
@@ -58,8 +61,14 @@ async def list_audit_logs(
     limit: int = 200,
     action: str | None = None,
     actor: str | None = None,
+    tenant: str = "default",
 ) -> list[AuditLog]:
-    stmt = select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
+    stmt = (
+        select(AuditLog)
+        .where(AuditLog.tenant_id == tenant)
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    )
     if action:
         stmt = stmt.where(AuditLog.action == action)
     if actor:

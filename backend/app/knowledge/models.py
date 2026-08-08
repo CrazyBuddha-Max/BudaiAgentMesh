@@ -14,6 +14,7 @@ class KnowledgeDoc(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     title: Mapped[str] = mapped_column(String(255), index=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True)  # M7 多租户
     source_type: Mapped[str] = mapped_column(String(16))  # txt/md/html/pdf
     file_name: Mapped[str] = mapped_column(String(512))
     file_size: Mapped[int] = mapped_column(Integer, default=0)
@@ -34,6 +35,7 @@ class KnowledgeChunk(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     doc_id: Mapped[int] = mapped_column(ForeignKey("knowledge_docs.id", ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[str] = mapped_column(String(64), default="default", index=True)  # M7 多租户
     chunk_index: Mapped[int] = mapped_column(Integer, default=0)
     content: Mapped[str] = mapped_column(Text)
     token_count: Mapped[int] = mapped_column(Integer, default=0)

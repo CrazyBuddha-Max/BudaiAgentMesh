@@ -22,10 +22,12 @@ async def ingest_document(
     raw: bytes,
     title: str | None = None,
     embedder=None,
+    tenant: str = "default",
 ) -> KnowledgeDoc:
     """解析 -> 切分 -> 向量化 -> 入库, 失败时保留失败记录供排查."""
     doc = KnowledgeDoc(
         title=title or os.path.splitext(file_name)[0],
+        tenant_id=tenant,
         source_type=guess_source_type(file_name),
         file_name=file_name,
         file_size=len(raw),
@@ -48,6 +50,7 @@ async def ingest_document(
                 session.add(
                     KnowledgeChunk(
                         doc_id=doc.id,
+                        tenant_id=tenant,
                         chunk_index=index,
                         content=content,
                         token_count=count_tokens(content),
@@ -67,21 +70,26 @@ async def ingest_document(
     return doc
 
 
-async def list_documents(session: AsyncSession, limit: int = 100) -> list[KnowledgeDoc]:
-    stmt = select(KnowledgeDoc).order_by(KnowledgeDoc.created_at.desc()).limit(limit)
+async def list_documents(session: AsyncSession, limit: int = 100, tenant: str = "default") -> list[KnowledgeDoc]:
+    stmt = (
+        select(KnowledgeDoc)
+        .where(KnowledgeDoc.tenant_id == tenant)
+        .order_by(KnowledgeDoc.created_at.desc())
+        .limit(limit)
+    )
     result = await session.execute(stmt)
     return list(result.scalars().all())
 
 
-async def get_document(session: AsyncSession, doc_id: int) -> KnowledgeDoc:
+async def get_document(session: AsyncSession, doc_id: int, tenant: str = "default") -> KnowledgeDoc:
     doc = await session.get(KnowledgeDoc, doc_id)
-    if doc is None:
+    if doc is None or doc.tenant_id != tenant:
         raise NotFoundError(f"知识文档不存在: {doc_id}")
     return doc
 
 
-async def delete_document(session: AsyncSession, doc_id: int) -> None:
-    doc = await get_document(session, doc_id)
+async def delete_document(session: AsyncSession, doc_id: int, tenant: str = "default") -> None:
+    doc = await get_document(session, doc_id, tenant=tenant)
     await session.delete(doc)
     await session.commit()
 
@@ -90,5 +98,6 @@ async def search(
     session: AsyncSession,
     query: str,
     top_k: int = 5,
+    tenant: str = "default",
 ) -> list[RetrieveHit]:
-    return await retrieve(session, query, top_k=top_k)
+    return await retrieve(session, query, top_k=top_k, tenant=tenant)

@@ -37,7 +37,7 @@ async def upload_document(
 ):
     """上传知识文档 (txt/md/html/pdf), 自动解析切分向量化入库."""
     raw = await file.read()
-    return await ingest_document(session, file.filename or "untitled", raw, title or None)
+    return await ingest_document(session, file.filename or "untitled", raw, title or None, tenant=user.tenant)
 
 
 @router.get("/documents", response_model=list[KnowledgeDocOut])
@@ -46,7 +46,7 @@ async def documents(
     limit: int = Query(100, le=500),
     session: AsyncSession = SessionDep,
 ):
-    return await list_documents(session, limit)
+    return await list_documents(session, limit, tenant=user.tenant)
 
 
 @router.get("/documents/{doc_id}", response_model=DocDetailOut)
@@ -55,7 +55,7 @@ async def document_detail(
     user: CurrentUserDep,
     session: AsyncSession = SessionDep,
 ):
-    return await get_document(session, doc_id)
+    return await get_document(session, doc_id, tenant=user.tenant)
 
 
 @router.delete("/documents/{doc_id}", status_code=204)
@@ -64,7 +64,7 @@ async def remove_document(
     user: AnalystDep,
     session: AsyncSession = SessionDep,
 ):
-    await delete_document(session, doc_id)
+    await delete_document(session, doc_id, tenant=user.tenant)
 
 
 @router.post("/retrieve", response_model=list[RetrieveHitOut])
@@ -74,7 +74,7 @@ async def retrieve_knowledge(
     session: AsyncSession = SessionDep,
 ):
     """语义检索: 返回与查询最相关的知识切块 (RAG 检索环节)."""
-    hits = await search(session, payload.query, top_k=payload.top_k)
+    hits = await search(session, payload.query, top_k=payload.top_k, tenant=user.tenant)
     return [RetrieveHitOut(**hit.__dict__) for hit in hits]
 
 
@@ -89,7 +89,7 @@ async def metrics(
     session: AsyncSession = SessionDep,
 ):
     """指标目录: 统一口径定义列表."""
-    items = await list_metrics(session, keyword, status, limit)
+    items = await list_metrics(session, keyword, status, limit, tenant=user.tenant)
     return [await to_out(session, m) for m in items]
 
 
@@ -98,7 +98,7 @@ async def create_metric_endpoint(
     payload: MetricCreate, user: AnalystDep, session: AsyncSession = SessionDep
 ):
     """新建指标: 绑定目录表, 度量表达式必须引用已注册列."""
-    metric = await create_metric(session, payload)
+    metric = await create_metric(session, payload, tenant=user.tenant)
     return await to_out(session, metric)
 
 
@@ -106,7 +106,7 @@ async def create_metric_endpoint(
 async def remove_metric(
     metric_id: int, user: AnalystDep, session: AsyncSession = SessionDep
 ) -> None:
-    await delete_metric(session, metric_id)
+    await delete_metric(session, metric_id, tenant=user.tenant)
 
 
 @router.post("/metrics/{metric_id}/query", response_model=MetricQueryResult)
@@ -117,4 +117,4 @@ async def run_metric_query(
     session: AsyncSession = SessionDep,
 ):
     """执行指标查询: 口径正确的数字 + 动态脱敏 + 审计血缘留痕."""
-    return await query_metric(session, metric_id, payload, actor=user.username, role=user.role)
+    return await query_metric(session, metric_id, payload, actor=user.username, role=user.role, tenant=user.tenant)

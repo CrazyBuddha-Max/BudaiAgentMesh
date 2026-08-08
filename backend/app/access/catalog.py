@@ -163,9 +163,13 @@ def _expand_search_terms(keyword: str) -> list[str]:
     return result
 
 
-async def get_table(session: AsyncSession, table_id: int) -> models.CatalogTable:
+async def get_table(session: AsyncSession, table_id: int, tenant: str = "default") -> models.CatalogTable:
     table = await session.get(models.CatalogTable, table_id)
     if table is None:
+        raise NotFoundError(f"目录表不存在: {table_id}")
+    # M7 多租户: 表的归属由其数据源决定
+    source = await session.get(models.DataSource, table.source_id)
+    if source is None or source.tenant_id != tenant:
         raise NotFoundError(f"目录表不存在: {table_id}")
     return table
 

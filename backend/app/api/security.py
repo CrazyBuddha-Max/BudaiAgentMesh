@@ -38,7 +38,7 @@ async def login(payload: LoginRequest, session: AsyncSession = SessionDep) -> Lo
     from app.security.audit import record_audit
 
     user = authenticate(payload.username, payload.password)
-    await record_audit(user.username, "auth.login", "user", user.username)
+    await record_audit(user.username, "auth.login", "user", user.username, tenant=user.tenant)
     return LoginResponse(access_token=create_token(user), user=user)
 
 
@@ -74,7 +74,7 @@ async def sso_callback(code: str, state: str, session: AsyncSession = SessionDep
     if not SSO_PROVIDER.validate_state(state):
         raise AuthError("state 校验失败, 请重新发起 SSO 登录")
     user = await SSO_PROVIDER.exchange_code(code)
-    await record_audit(user.username, "auth.sso_login", "user", user.username)
+    await record_audit(user.username, "auth.sso_login", "user", user.username, tenant=user.tenant)
     return LoginResponse(access_token=create_token(user), user=user)
 
 
@@ -136,7 +136,7 @@ async def audit_logs(
 ):
     """审计日志: 谁在何时访问了什么 (M3)."""
 
-    logs = await list_audit_logs(session, limit=limit, action=action, actor=actor)
+    logs = await list_audit_logs(session, limit=limit, action=action, actor=actor, tenant=user.tenant)
     return [
         {
             "id": log.id,
