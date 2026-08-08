@@ -22,3 +22,9 @@ dist/
 # IDE
 .idea/
 .vscode/
+
+# Orca worktrees (并行开发分支, 不属于本仓库)
+.orca/
+
+# 前端构建产物
+frontend/tsconfig.tsbuildinfo

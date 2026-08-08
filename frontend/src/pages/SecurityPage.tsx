@@ -40,11 +40,11 @@ const MATRIX: {capability: string; admin: boolean; analyst: boolean; viewer: boo
 const CAPS: {name: string; desc: string; stage: string}[] = [
   {name: '认证 (JWT)', desc: '令牌签发与校验, 内置账号 RBAC 角色模型', stage: '已启用'},
   {name: '权限模型 (RBAC)', desc: 'viewer / analyst / admin 三级角色门槛', stage: '已启用'},
-  {name: '动态脱敏', desc: '敏感列识别 + 按角色动态掩码 (手机/身份证/银行卡/邮箱/姓名/地址)', stage: '已启用 (M3)'},
-  {name: '审计日志', desc: '登录/采集/指标查询/数据采样/Agent 任务全链路留痕, 独立会话写入', stage: '已启用 (M3)'},
-  {name: '数据血缘', desc: '源表 → 指标 → 任务 → 结果, 图结构可查询可追溯', stage: '已启用 (M3)'},
-  {name: '细粒度权限 (行/列/单元格)', desc: '基于血缘传导的上下文感知授权', stage: '规划中 (M5)'},
-  {name: '生命周期治理', desc: '保留期限 / 归档 / 销毁, 合规 (PIPL/GDPR)', stage: '规划中 (M5)'},
+  {name: '动态脱敏', desc: '敏感列识别 + 按角色动态掩码 (手机/身份证/银行卡/邮箱/姓名/地址)', stage: '已启用'},
+  {name: '审计日志', desc: '登录/采集/指标查询/数据采样/Agent 任务全链路留痕, 独立会话写入', stage: '已启用'},
+  {name: '数据血缘', desc: '源表 → 指标 → 任务 → 结果, 图结构可查询可追溯', stage: '已启用'},
+  {name: '细粒度列级权限', desc: '按角色禁止访问指定列, 与动态脱敏叠加生效', stage: '已启用'},
+  {name: '生命周期治理', desc: '保留期策略 + 状态评估 (活跃/临期/过期), 到期时间自动计算', stage: '已启用'},
 ];
 
 export function SecurityPage() {
@@ -134,7 +134,7 @@ export function SecurityPage() {
         <VStack gap={4}>
           <HStack gap={2} vAlign="center">
             <ShieldCheck size={18} />
-            <Text weight="semibold">RBAC 权限矩阵 (M1 已启用)</Text>
+            <Text weight="semibold">RBAC 权限矩阵</Text>
           </HStack>
           <Table
             data={MATRIX as never}
@@ -182,7 +182,7 @@ export function SecurityPage() {
         <VStack gap={3}>
           <HStack gap={2} vAlign="center">
             <EyeOff size={18} />
-            <Text weight="semibold">动态脱敏策略 (M3 已启用)</Text>
+            <Text weight="semibold">动态脱敏策略</Text>
             <Text type="supporting"><span className="muted">viewer/analyst 查询时 PII 自动掩码, admin 可见明文</span></Text>
           </HStack>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12}}>
@@ -240,7 +240,7 @@ export function SecurityPage() {
         <VStack gap={3}>
           <HStack gap={2} vAlign="center">
             <ShieldBan size={18} />
-            <Text weight="semibold">细粒度列级权限 (M5 已启用)</Text>
+            <Text weight="semibold">细粒度列级权限</Text>
             <Text type="supporting"><span className="muted">按角色禁止访问指定列, 与动态脱敏叠加生效</span></Text>
           </HStack>
           <HStack gap={2} vAlign="end" wrap="wrap">
@@ -303,7 +303,7 @@ export function SecurityPage() {
         <VStack gap={3}>
           <HStack gap={2} vAlign="center">
             <DbIcon size={18} />
-            <Text weight="semibold">数据生命周期 (M5)</Text>
+            <Text weight="semibold">数据生命周期</Text>
             <Text type="supporting"><span className="muted">保留期策略: 自最近采集起算, 临期/到期自动标记</span></Text>
             <HStack gap={1}>
               <Badge label={`无策略 ${lifecycle.data?.summary.by_status['no-policy'] ?? 0}`} variant="neutral" />

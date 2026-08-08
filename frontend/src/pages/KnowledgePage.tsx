@@ -8,7 +8,6 @@ import {Button} from '@astryxdesign/core/Button';
 import {Card} from '@astryxdesign/core/Card';
 import {Text} from '@astryxdesign/core/Text';
 import {TextInput} from '@astryxdesign/core/TextInput';
-import {TextArea} from '@astryxdesign/core/TextArea';
 import {FileInput} from '@astryxdesign/core/FileInput';
 import {VStack} from '@astryxdesign/core/VStack';
 import {HStack} from '@astryxdesign/core/HStack';
@@ -142,7 +141,7 @@ export function KnowledgePage() {
           <HStack gap={2} vAlign="center">
             <Search size={18} />
             <Text weight="semibold">语义检索</Text>
-            <Text type="supporting"><span className="muted">基于向量相似度, 返回最相关知识切块</span></Text>
+            <Text type="supporting"><span className="muted">可插拔向量后端: 默认全量余弦 / PostgreSQL pgvector / Milvus</span></Text>
           </HStack>
           <HStack gap={2} vAlign="end">
             <TextInput
