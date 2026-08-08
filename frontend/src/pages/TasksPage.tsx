@@ -43,6 +43,8 @@ export function TasksPage() {
   const [addCollab, setAddCollab] = useState('');
   const [autoCollab, setAutoCollab] = useState(false);
   const [rating, setRating] = useState(5);
+  const [isNarrow, setIsNarrow] = useState(typeof window !== 'undefined' && window.innerWidth < 900);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [showChain, setShowChain] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -53,6 +55,14 @@ export function TasksPage() {
   const agentNameOf = (id: number) => agents.data?.find((a) => a.id === id)?.name ?? `Agent#${id}`;
   const activeTask = tasks.data?.find((t) => t.id === activeId) ?? null;
   const running = tasks.data?.find((t) => t.status === 'running');
+
+  // 窄屏 (手机) 适配: 侧栏折叠为抽屉
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 900px)');
+    const onChange = () => setIsNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   // 智能推荐协作 Agent (M7): 按目标关键词匹配能力, 自动选 1 个 (排除主控)
   const recommendCollaborator = (): string => {
@@ -127,8 +137,9 @@ export function TasksPage() {
 
   return (
     <div className="page-stack" style={{height: 'calc(100vh - 120px)'}}>
-      <div style={{display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16, height: '100%', minHeight: 0}}>
-        {/* 历史会话侧栏 */}
+      <div style={{display: 'grid', gridTemplateColumns: isNarrow ? '1fr' : '280px 1fr', gap: 16, height: '100%', minHeight: 0}}>
+        {/* 历史会话侧栏 (窄屏时隐藏, 用顶部按钮唤起) */}
+        {!isNarrow && (
         <Card variant="muted" style={{padding: 12, display: 'flex', flexDirection: 'column', minHeight: 0}}>
           <VStack gap={2} style={{flex: 1, minHeight: 0, overflowY: 'auto'}}>
             <HStack gap={2} vAlign="center" hAlign="between" style={{padding: '4px 6px'}}>
@@ -167,11 +178,21 @@ export function TasksPage() {
             ))}
           </VStack>
         </Card>
+        )}
 
         {/* 对话窗口 */}
         <Card variant="muted" style={{padding: 0, display: 'flex', flexDirection: 'column', minHeight: 0}}>
           {/* 顶部: 紧凑工具栏 */}
           <div style={{padding: '10px 14px', borderBottom: '1px solid rgba(0,0,0,0.06)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap'}}>
+            {isNarrow && (
+              <Button
+                label={historyOpen ? '关闭历史' : `历史 ${tasks.data?.length ?? 0}`}
+                size="sm"
+                variant="secondary"
+                icon={<ListTree size={13} />}
+                onClick={() => setHistoryOpen(!historyOpen)}
+              />
+            )}
             <Selector
               label="主控 Agent"
               size="sm"
@@ -233,6 +254,33 @@ export function TasksPage() {
               />
             )}
           </div>
+
+          {/* 窄屏历史抽屉 */}
+          {isNarrow && historyOpen && (
+            <div style={{maxHeight: 220, overflowY: 'auto', borderBottom: '1px solid rgba(0,0,0,0.06)', padding: '8px 12px'}}>
+              <VStack gap={1}>
+                <Button label="新建会话" size="sm" variant="ghost" icon={<Plus size={13} />} onClick={() => { setActiveId(null); setHistoryOpen(false); }} />
+                {history.map((t: AgentTask) => (
+                  <button
+                    key={t.id}
+                    onClick={() => { setActiveId(t.id); setHistoryOpen(false); }}
+                    style={{
+                      display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left', cursor: 'pointer',
+                      padding: '6px 10px', borderRadius: 6, border: 'none', width: '100%',
+                      background: activeId === t.id ? 'rgba(43, 109, 232, 0.1)' : 'transparent',
+                    }}
+                  >
+                    <HStack gap={1} vAlign="center" hAlign="between">
+                      <Text style={{fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{t.objective}</Text>
+                      <StatusBadge status={t.status} />
+                    </HStack>
+                    <Text type="supporting" style={{fontSize: 11}}><span className="muted">#{t.id} · {t.created_at.slice(5, 16).replace('T', ' ')}</span></Text>
+                  </button>
+                ))}
+                {history.length === 0 && <Text type="supporting" style={{padding: 4}}><span className="muted">暂无会话</span></Text>}
+              </VStack>
+            </div>
+          )}
 
           {/* 消息区 */}
           <div ref={scrollRef} style={{flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 24px'}}>
