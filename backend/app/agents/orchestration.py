@@ -284,6 +284,20 @@ async def get_task(session: AsyncSession, task_id: int) -> AgentTask:
 
 
 async def list_tasks(session: AsyncSession, limit: int = 50) -> list[AgentTask]:
+    await _mark_stale_running(session)  # 修正因进程重启/中断而卡死的任务
     stmt = select(AgentTask).order_by(AgentTask.created_at.desc()).limit(limit)
     result = await session.execute(stmt)
     return list(result.scalars().all())
+
+
+async def _mark_stale_running(session: AsyncSession) -> None:
+    """把长时间停留在 running 的任务标记为 failed (执行被中断, 如进程重启/LLM 超时)."""
+    from sqlalchemy import update
+
+    cutoff = dt.datetime.now(dt.UTC) - dt.timedelta(minutes=5)
+    await session.execute(
+        update(AgentTask)
+        .where(AgentTask.status == "running", AgentTask.created_at < cutoff)
+        .values(status="failed", error="执行中断 (进程重启或超时), 请重新发起", finished_at=dt.datetime.now(dt.UTC))
+    )
+    await session.commit()

@@ -283,6 +283,18 @@ export function TasksPage() {
                           )}
                         </Text>
                         <Text className="mono" style={{whiteSpace: 'pre-wrap'}}>{answerText(activeTask)}</Text>
+                        {activeTask.status === 'failed' && (
+                          <Button
+                            label="重新执行"
+                            size="sm"
+                            variant="secondary"
+                            style={{marginTop: 8}}
+                            icon={<Bot size={13} />}
+                            isDisabled={!!running || !canEdit}
+                            isLoading={runTask.isPending && runTask.variables === activeTask.id}
+                            onClick={() => runTask.mutate(activeTask.id)}
+                          />
+                        )}
                       </div>
                     </HStack>
                   </Bubble>
