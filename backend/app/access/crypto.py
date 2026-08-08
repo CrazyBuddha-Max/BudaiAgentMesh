@@ -1,4 +1,6 @@
 """连接器口令加密 (Fernet): 密文落库, 明文只存在于内存."""
+import base64
+
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
@@ -15,7 +17,7 @@ def _fernet_instance() -> Fernet:
     global _fernet
     if _fernet is None:
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=b"budai-mesh-salt", iterations=100_000)
-        key = kdf.derive(settings.secret_key.encode())
+        key = base64.urlsafe_b64encode(kdf.derive(settings.secret_key.encode()))
         _fernet = Fernet(key)
     return _fernet
 

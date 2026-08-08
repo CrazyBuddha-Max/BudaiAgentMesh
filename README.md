@@ -30,7 +30,7 @@
 | 后端 API 端点  | 47 条路径 / 70+ 操作                        |
 | 数据模型表      | 16 张 (含租户/联邦对等实例)                   |
 | 前端页面       | 9 个                                 |
-| 自动化测试      | 44 项, 全部通过 (M6 新增向量后端/增量/SSO/多租户/联邦/上传 20 项)  |
+| 自动化测试      | 48 项, 全部通过 (M7 新增大模型接入 4 项)  |
 | MCP Server | /mcp/mcp (streamable-http), 4 个数据工具 |
 | 代码质量       | ruff 全绿, 前端 tsc+vite build 通过             |
 
@@ -55,6 +55,7 @@
 **③ 多 Agent 协同层** (app/agents)
 
 - Agent 注册中心: 身份 / 能力声明 (Capability Manifest) / 状态管理
+- **大模型接入 (M7)**: 模型提供方管理 (OpenAI/DeepSeek/通义/Ollama 等 OpenAI 兼容协议), Fernet 加密密钥, Agent 可绑定独立模型, 任务规划/汇总真实调用 LLM (未配置时模板降级)
 - Agent 模板市场 (M4): 预置 5 个角色模板 (分析助手/检索员/分析员/报告员/审计员), 一键创建
 - 工具注册中心 (MCP 雏形): `knowledge.retrieve` / `catalog.search_tables` / `data.query_table`, JSON Schema 暴露
 - 真并行 DAG 编排 (M4): 知识检索 ∥ 目录检索 各分支独立会话 asyncio.gather, 分工到具能力的 Agent
@@ -147,7 +148,7 @@ docker compose up -d --build
   - [x] 完整 MCP Server (/mcp/mcp, 4 工具, 任意 MCP 客户端可调用)
   - [x] 列级权限: 按角色禁止列访问, 数据/指标双拦截
   - [x] 数据生命周期: 保留期策略 + 状态评估
-- [x] **M6**: 多租户 + 联邦接入 + CDC 增量 + SSO/OAuth2.0 + pgvector/Milvus + OTel (当前)
+- [x] **M6**: 多租户 + 联邦接入 + CDC 增量 + SSO/OAuth2.0 + pgvector/Milvus + OTel
   - [x] 可插拔向量后端 (M6-1): pgvector (`<=>` 余弦距离) / Milvus 适配, 接口保持业务无感
   - [x] SSO / OAuth2.0 登录 (M6-2): 通用 OIDC 授权码流 + 内置演示 IdP + 前端一键登录
   - [x] OTel 观测 (M6-3): OTLP/HTTP span 上报 (采集/入库/Agent 任务), 零额外依赖, 未配置零开销
@@ -155,7 +156,10 @@ docker compose up -d --build
   - [x] 多租户 (M6-5): 数据接入层按 tenant 硬隔离, JWT 携带租户声明, 账号格式扩展 username:password:role:tenant
   - [x] 联邦接入 (M6-6): 实例间目录/数据透传 (Bearer 令牌), 并发检索全部启用对等实例
   - [x] CSV 浏览器上传 (M6-7): multipart 上传落盘免填路径
-- [ ] **M7** (规划): 租户扩展到知识/Agent 层 · 真实 PostgreSQL 逻辑复制 CDC · Prometheus 指标暴露 · 多租户配额/密钥隔离 · 联邦双向认证
+- [ ] **M7** (当前)
+  - [x] 真实大模型接入 (M7-1): LLM 提供方管理面板 (OpenAI/DeepSeek/通义/Ollama), 密钥 Fernet 加密, Agent 绑定独立模型, 任务规划/汇总真实 LLM 调用, 知识入库真实向量化 (ProviderEmbedder)
+  - [ ] 多租户扩展到知识/Agent 层 (M7-2): 租户隔离覆盖知识文档 / Agent 任务 / 审计日志
+  - [ ] 真实 PostgreSQL 逻辑复制 CDC (M7-3) · Prometheus 指标暴露 (M7-4) · 联邦双向认证 (M7-5)
 
 ## 测试
 

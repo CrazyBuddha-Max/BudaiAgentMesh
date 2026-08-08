@@ -20,6 +20,7 @@ import type {
   KnowledgeDoc,
   LifecycleData,
   LineageGraph,
+  LLMProvider,
   LoginResponse,
   MaskingPolicy,
   MetricDefinition,
@@ -90,6 +91,19 @@ export const api = {
   ssoConfig: () => request<{enabled: boolean; name: string; authorize_url: string | null}>('/security/sso/config'),
   ssoCallback: (code: string, state: string) =>
     request<LoginResponse>(`/security/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`),
+
+  // M7: 大模型接入
+  llmProviders: () => request<LLMProvider[]>('/agents/llm/providers'),
+  createLlmProvider: (payload: Record<string, unknown>) =>
+    request<LLMProvider>('/agents/llm/providers', {method: 'POST', body: JSON.stringify(payload)}),
+  updateLlmProvider: (id: number, payload: Record<string, unknown>) =>
+    request<LLMProvider>(`/agents/llm/providers/${id}`, {method: 'PATCH', body: JSON.stringify(payload)}),
+  deleteLlmProvider: (id: number) =>
+    request<void>(`/agents/llm/providers/${id}`, {method: 'DELETE'}),
+  testLlmProvider: (id: number) =>
+    request<{provider_id: number; name: string; message: string}>(`/agents/llm/providers/${id}/test`, {method: 'POST'}),
+  setLlmDefault: (id: number) =>
+    request<LLMProvider>(`/agents/llm/providers/${id}/default`, {method: 'POST'}),
   me: () => request<CurrentUser>('/security/me'),
 
   // 数据源
@@ -157,7 +171,8 @@ export const api = {
 
   // 多 Agent 协同层
   listAgents: () => request<AgentInfo[]>('/agents'),
-  createAgent: (payload: {name: string; description?: string; capabilities?: string[]; tools?: string[]}) =>
+  agents: () => request<AgentInfo[]>('/agents'),
+  createAgent: (payload: {name: string; description?: string; llm_provider_id?: number | null; capabilities?: string[]; tools?: string[]}) =>
     request<AgentInfo>('/agents', {method: 'POST', body: JSON.stringify(payload)}),
   deleteAgent: (id: number) => request<void>(`/agents/${id}`, {method: 'DELETE'}),
   listTools: () => request<ToolInfo[]>('/agents/tools'),

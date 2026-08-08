@@ -165,6 +165,8 @@ export interface AgentInfo {
   id: number;
   name: string;
   description: string | null;
+  llm_provider_id: number | null;  // M7 绑定模型提供方
+  llm_provider_name?: string | null;
   capabilities: string[];
   tools: string[];
   status: 'active' | 'paused' | 'offline';
@@ -317,4 +319,19 @@ export interface FederationResult {
   peer: string;
   data?: Array<Record<string, unknown>>;
   error?: string;
+}
+
+// M7: 大模型接入
+export interface LLMProvider {
+  id: number;
+  name: string;
+  provider_type: string;
+  api_base: string;
+  model: string;
+  embedding_model?: string | null;
+  temperature: number;
+  max_tokens: number;
+  enabled: boolean;
+  is_default: boolean;
+  created_at: string;
 }

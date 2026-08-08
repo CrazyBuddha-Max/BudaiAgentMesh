@@ -15,6 +15,9 @@ class Agent(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), unique=True, index=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    llm_provider_id: Mapped[int | None] = mapped_column(
+        ForeignKey("llm_providers.id", ondelete="SET NULL"), nullable=True
+    )  # 绑定的模型提供方 (M7); 空 = 用默认提供方
     capabilities: Mapped[list] = mapped_column(JSON, default=list)  # 能力声明 (Capability Manifest)
     tools: Mapped[list] = mapped_column(JSON, default=list)  # 可调用工具名; 空 = 全部
     status: Mapped[str] = mapped_column(String(16), default="active")  # active/paused/offline

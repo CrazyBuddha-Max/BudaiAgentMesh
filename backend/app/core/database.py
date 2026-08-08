@@ -30,6 +30,7 @@ async def init_db() -> None:
     from app.access import models as _access_models  # noqa: F401  确保模型已注册
     from app.access.federated import FederatedPeer  # noqa: F401  联邦对等实例
     from app.agents import models as _agent_models  # noqa: F401  确保模型已注册
+    from app.agents.llm import LLMProvider  # noqa: F401  大模型提供方
     from app.feedback.feedback import TaskFeedback  # noqa: F401  反馈闭环
     from app.knowledge import models as _knowledge_models  # noqa: F401  确保模型已注册
     from app.knowledge.metrics_models import MetricDefinition  # noqa: F401  指标语义层
@@ -51,6 +52,7 @@ _ADD_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("tenant_id", "VARCHAR(64)"),  # M6 多租户
     ],
     "agent_tasks": [("collaborators", "JSON")],  # M4 协作 Agent
+    "agents": [("llm_provider_id", "INTEGER")],  # M7 绑定模型提供方
 }
 
 

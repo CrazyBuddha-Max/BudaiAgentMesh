@@ -39,6 +39,7 @@ export function AgentsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [agentName, setAgentName] = useState('');
   const [agentDesc, setAgentDesc] = useState('');
+  const [agentModelId, setAgentModelId] = useState('');  // M7 绑定模型提供方
   const [objective, setObjective] = useState('');
   const [runTarget, setRunTarget] = useState<number | null>(null);
   const [mainAgentId, setMainAgentId] = useState('');
@@ -51,12 +52,14 @@ export function AgentsPage() {
   const tasks = useQuery({queryKey: ['agent-tasks'], queryFn: api.listTasks});
   const templates = useQuery({queryKey: ['agent-templates'], queryFn: api.listTemplates});
   const bus = useQuery({queryKey: ['agent-bus'], queryFn: api.busStats, refetchInterval: 10_000});
+  const providers = useQuery({queryKey: ['llm-providers'], queryFn: api.llmProviders});  // M7 模型绑定
 
   const createAgent = useMutation({
     mutationFn: () =>
       api.createAgent({
         name: agentName,
         description: agentDesc || undefined,
+        llm_provider_id: agentModelId ? Number(agentModelId) : null,
         capabilities: ['knowledge_retrieval', 'data_access'],
         tools: [],
       }),
@@ -65,6 +68,7 @@ export function AgentsPage() {
       setShowCreate(false);
       setAgentName('');
       setAgentDesc('');
+      setAgentModelId('');
       qc.invalidateQueries({queryKey: ['agents']});
     },
     onError: (e) => toast({body: e instanceof Error ? e.message : '创建失败', type: 'error'}),
@@ -202,6 +206,18 @@ export function AgentsPage() {
               <TextInput label="Agent 名称" value={agentName} onChange={setAgentName} isRequired placeholder="如 经营分析助手" />
               <TextInput label="职责描述" value={agentDesc} onChange={setAgentDesc} placeholder="负责检索业务口径并定位数据" />
             </div>
+            <Selector
+              label="对接模型 (留空 = 默认提供方)"
+              value={agentModelId}
+              onChange={setAgentModelId}
+              options={[
+                {label: '默认提供方 (未绑定)', value: ''},
+                ...(providers.data ?? []).map((p) => ({
+                  label: `${p.name} · ${p.model}${p.is_default ? ' (默认)' : ''}`,
+                  value: String(p.id),
+                })),
+              ]}
+            />
             <HStack hAlign="end">
               <Button label="注册" variant="primary" isDisabled={!agentName} isLoading={createAgent.isPending} onClick={() => createAgent.mutate()} />
             </HStack>

@@ -86,10 +86,55 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
     await session.commit()
     await emit(session, "task_started", main_agent.id, {"objective": task.objective, "team": team_names})
 
+    # M7: 解析模型提供方 (Agent 绑定优先, 否则默认; 无配置则模板降级)
+    provider = None
     try:
+        from app.agents.llm import get_default_provider, get_provider
+
+        if main_agent.llm_provider_id:
+            provider = await get_provider(session, main_agent.llm_provider_id)
+        else:
+            provider = await get_default_provider(session)
+    except Exception:
+        provider = None
+
+    llm_mode = provider is not None and provider.enabled
+
+    try:
+        # ---- LLM 规划 (真实调用, 失败降级为固定步骤) ----
+        steps: list[str] = ["knowledge.retrieve", "catalog.search_tables", "data.query_table"]
+        if llm_mode:
+            try:
+                from app.agents.llm import chat_completion
+
+                plan = await chat_completion(
+                    provider,
+                    [
+                        {"role": "system", "content": (
+                            "你是任务规划器。根据用户目标, 从工具 knowledge.retrieve(知识检索), "
+                            "catalog.search_tables(目录检索), data.query_table(数据采样) 中选择并排序 1-5 个步骤。"
+                            "只输出 JSON 数组, 如 [\"knowledge.retrieve\", \"catalog.search_tables\"]。"
+                        )},
+                        {"role": "user", "content": task.objective},
+                    ],
+                    temperature=0,
+                    max_tokens=200,
+                )
+                import json
+                import re
+
+                m = re.search(r"\[[^\]]+\]", plan)
+                if m:
+                    parsed = json.loads(m.group(0))
+                    if isinstance(parsed, list) and parsed:
+                        steps = [str(s) for s in parsed][:5]
+                await emit(session, "llm.plan", main_agent.id, {"provider": provider.name, "model": provider.model, "steps": steps})
+            except Exception as exc:
+                await emit(session, "llm.plan", main_agent.id, {"provider": provider.name, "error": str(exc)[:200], "fallback": True})
+
         await emit(
             session, "plan", main_agent.id,
-            {"steps": ["knowledge.retrieve", "catalog.search_tables", "data.query_table"]},
+            {"steps": steps, "llm": llm_mode},
         )
 
         # 分工: 优先协作 Agent 承担专业步骤, 主控规划与汇总
@@ -120,13 +165,9 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
 
         knowledge_hits, table_hits = await asyncio.gather(branch_retrieve(), branch_search())
 
-        lines: list[str] = [f"任务目标: {task.objective}", f"协作团队: {team_names}"]
-        lines.append(f"[并行] {retriever.name}·知识检索 ∥ {analyst.name}·目录检索")
-        lines.append(f"[{retriever.name}·知识检索] {_summarize(knowledge_hits)}")
-        lines.append(f"[{analyst.name}·目录检索] {_summarize(table_hits)}")
-
         # 数据采样: 取目录检索命中的第一张表
         candidates = table_hits if isinstance(table_hits, list) else []
+        sample_rows_result = None
         if candidates:
             await emit(
                 session, "tool_call", analyst.id,
@@ -137,14 +178,43 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
                 {"table_id": candidates[0]["table_id"], "limit": 5, "actor": f"agent:{analyst.name}", "role": "analyst"},
             )
             if resp.get("ok"):
+                sample_rows_result = resp["result"]
                 await emit(session, "tool_result", analyst.id, {"tool": "data.query_table", "summary": _summarize(resp["result"])})
-                lines.append(f"[{analyst.name}·数据采样] {_summarize(resp['result'])}")
         else:
             await emit(session, "tool_call", analyst.id, {"tool": "data.query_table", "status": "skipped", "reason": "目录无匹配表"})
-            lines.append(f"[{analyst.name}·数据采样] 目录中无匹配数据表, 跳过")
 
-        # 主控汇总
-        task.result = "\n".join(lines)
+        # 主控汇总: LLM 生成结论 (真实调用, 失败降级为结构化拼接)
+        lines: list[str] = [f"任务目标: {task.objective}", f"协作团队: {team_names}"]
+        lines.append(f"[并行] {retriever.name}·知识检索 ∥ {analyst.name}·目录检索")
+        lines.append(f"[{retriever.name}·知识检索] {_summarize(knowledge_hits)}")
+        lines.append(f"[{analyst.name}·目录检索] {_summarize(table_hits)}")
+        sampling_line = "目录中无匹配数据表, 跳过"
+        if sample_rows_result is not None:
+            sampling_line = _summarize(sample_rows_result)
+        lines.append(f"[{analyst.name}·数据采样] {sampling_line}")
+
+        if llm_mode:
+            try:
+                from app.agents.llm import chat_completion
+
+                context = "\n".join(lines)
+                answer = await chat_completion(
+                    provider,
+                    [
+                        {"role": "system", "content": (
+                            "你是数据分析助手。基于给定的任务目标与各步骤执行摘要, 撰写一份结构化结论:"
+                            "先给结论, 再列依据 (知识/数据), 最后给出局限与建议。用中文, 简洁专业, 200 字以内。"
+                        )},
+                        {"role": "user", "content": context},
+                    ],
+                )
+                task.result = f"【LLM 汇总 · {provider.name}/{provider.model}】\n\n{answer}"
+                await emit(session, "llm.summary", reporter.id, {"provider": provider.name, "model": provider.model})
+            except Exception as exc:
+                task.result = "\n".join(lines)
+                await emit(session, "llm.summary", reporter.id, {"error": str(exc)[:200], "fallback": True})
+        else:
+            task.result = "\n".join(lines)
         task.status = "succeeded"
         task.finished_at = dt.datetime.now(dt.UTC)
         await session.commit()
