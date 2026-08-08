@@ -160,7 +160,7 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
                         kw = str(parsed.get("keyword", "")).strip()
                         if kw and kw != "None":
                             search_keyword = kw
-                await emit(session, "llm.plan", main_agent.id, {"provider": provider.name, "model": provider.model, "steps": steps, "keyword": search_keyword, "agents": {t: agentNameOf(aid) for t, aid in plan_agents.items()}})
+                await emit(session, "llm.plan", main_agent.id, {"provider": provider.name, "model": provider.model, "steps": steps, "keyword": search_keyword, "agents": {t: next((a.name for a in [main_agent, *collaborators] if a.id == aid), str(aid)) for t, aid in plan_agents.items()}})
             except Exception as exc:
                 await emit(session, "llm.plan", main_agent.id, {"provider": provider.name, "error": str(exc)[:200], "fallback": True})
 
