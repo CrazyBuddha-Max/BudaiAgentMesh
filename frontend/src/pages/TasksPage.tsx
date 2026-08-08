@@ -158,6 +158,14 @@ export function TasksPage() {
                       onClick={() => setExpanded(expanded === t.id ? null : t.id)}
                     />
                   </HStack>
+                  {t.result && (
+                    <Card variant="muted" style={{padding: 10}}>
+                      <Text type="body" className="mono" style={{whiteSpace: 'pre-wrap', fontSize: 13}}>
+                        {t.result.split('\n').slice(1).join('\n').trim().slice(0, 300)}
+                        {t.result.split('\n').length > 1 && t.result.length > 300 ? '...' : ''}
+                      </Text>
+                    </Card>
+                  )}
                   {expanded === t.id && (
                     <TaskDetail
                       task={t}

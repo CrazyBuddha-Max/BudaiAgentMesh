@@ -193,19 +193,37 @@ async def run_task(session: AsyncSession, task_id: int) -> AgentTask:
             sampling_line = _summarize(sample_rows_result)
         lines.append(f"[{analyst.name}·数据采样] {sampling_line}")
 
+        # 汇总上下文: 附上知识命中原文与采样数据, 让 LLM 能给出具体答案而非泛泛而谈
+        llm_context = "\n".join(lines)
+        knowledge_texts: list[str] = []
+        for idx, hit in enumerate(knowledge_hits[:3]):
+            content = hit.get("content") if isinstance(hit, dict) else getattr(hit, "content", "")
+            if content:
+                knowledge_texts.append(f"[知识{idx + 1}] {str(content)[:500]}")
+        if knowledge_texts:
+            llm_context += "\n\n=== 知识库命中原文 ===\n" + "\n".join(knowledge_texts)
+        if sample_rows_result is not None:
+            rows = sample_rows_result.get("rows", []) if isinstance(sample_rows_result, dict) else []
+            if rows:
+                import json as _json
+
+                llm_context += "\n\n=== 数据表采样 ===\n" + _json.dumps(rows, ensure_ascii=False, default=str)[:1200]
+
         if llm_mode:
             try:
                 from app.agents.llm import chat_completion
 
-                context = "\n".join(lines)
                 answer = await chat_completion(
                     provider,
                     [
                         {"role": "system", "content": (
-                            "你是数据分析助手。基于给定的任务目标与各步骤执行摘要, 撰写一份结构化结论:"
-                            "先给结论, 再列依据 (知识/数据), 最后给出局限与建议。用中文, 简洁专业, 200 字以内。"
+                            "你是数据分析助手。直接回答用户的问题, 给出具体、可操作的结论。"
+                            "规则: 1) 必须基于提供的知识原文与数据采样作答, 引用具体数字/口径; "
+                            "2) 若数据不足, 明确说出缺少什么, 但先用已有知识给出最可能的答案; "
+                            "3) 输出格式: 【结论】一段话, 【依据】要点列表, 【局限与建议】. "
+                            "用中文, 200 字以内, 不得回复'无法生成结论'之类回避性文字。"
                         )},
-                        {"role": "user", "content": context},
+                        {"role": "user", "content": llm_context},
                     ],
                 )
                 task.result = f"【LLM 汇总 · {provider.name}/{provider.model}】\n\n{answer}"
