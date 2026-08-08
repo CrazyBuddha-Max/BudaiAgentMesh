@@ -132,6 +132,23 @@ export function TasksPage() {
     ask.mutate(Number(mainAgentId));
   };
 
+  // 打开某个历史会话: 恢复该会话保存的主控/协作 Agent 配置
+  const openTask = (t: AgentTask) => {
+    setActiveId(t.id);
+    setMainAgentId(String(t.agent_id));
+    setCollaborators((t.collaborators ?? []).map(String));
+    setAutoCollab(true);  // 视为手动指定过, 不再覆盖
+    setHistoryOpen(false);
+    setShowChain(false);
+  };
+
+  // 新建会话: 保留当前选中的主控/协作 (无需每次重选)
+  const newTask = () => {
+    setActiveId(null);
+    setHistoryOpen(false);
+    setShowChain(false);
+  };
+
   // 最近 50 条历史, 倒序展示 (最新在上)
   const history = [...(tasks.data ?? [])];
 
@@ -149,7 +166,7 @@ export function TasksPage() {
                 size="sm"
                 variant="ghost"
                 icon={<Plus size={13} />}
-                onClick={() => setActiveId(null)}
+                onClick={newTask}
               />
             </HStack>
             {history.length === 0 && (
@@ -158,7 +175,7 @@ export function TasksPage() {
             {history.map((t: AgentTask) => (
               <button
                 key={t.id}
-                onClick={() => setActiveId(t.id)}
+                onClick={() => openTask(t)}
                 style={{
                   display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left', cursor: 'pointer',
                   padding: '8px 10px', borderRadius: 8, border: 'none', width: '100%',
@@ -259,11 +276,11 @@ export function TasksPage() {
           {isNarrow && historyOpen && (
             <div style={{maxHeight: 220, overflowY: 'auto', borderBottom: '1px solid rgba(0,0,0,0.06)', padding: '8px 12px'}}>
               <VStack gap={1}>
-                <Button label="新建会话" size="sm" variant="ghost" icon={<Plus size={13} />} onClick={() => { setActiveId(null); setHistoryOpen(false); }} />
+                <Button label="新建会话" size="sm" variant="ghost" icon={<Plus size={13} />} onClick={newTask} />
                 {history.map((t: AgentTask) => (
                   <button
                     key={t.id}
-                    onClick={() => { setActiveId(t.id); setHistoryOpen(false); }}
+                    onClick={() => openTask(t)}
                     style={{
                       display: 'flex', flexDirection: 'column', gap: 2, textAlign: 'left', cursor: 'pointer',
                       padding: '6px 10px', borderRadius: 6, border: 'none', width: '100%',
