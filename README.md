@@ -45,9 +45,9 @@
 
 **② 知识沉淀层** (app/knowledge)
 
-- RAG 流水线: 文档解析 (txt/md/html/pdf) → 段落+重叠切分 → 向量化 (HashEmbedder 离线兜底 / OpenAI 可插拔) → 余弦语义检索
+- RAG 流水线: 文档解析 (txt/md/html/pdf) → 段落+重叠切分 → 向量化 (HashEmbedder 离线兜底 / OpenAI 可插拔) → 语义检索
+- 可插拔向量后端 (M6): 默认全量余弦 / PostgreSQL pgvector (`<=>` 距离 SQL 端排序) / Milvus, 接口保持业务无感
 - 指标语义层: 指标定义 CRUD + 表达式白名单校验 (expr.py) + 聚合查询/维度下钻/越权拦截
-- 检索接口抽象: M3 迁移 pgvector/Milvus 不动业务代码
 
 **③ 多 Agent 协同层** (app/agents)
 
@@ -140,7 +140,8 @@ docker compose up -d --build
   - [x] 完整 MCP Server (/mcp/mcp, 4 工具, 任意 MCP 客户端可调用)
   - [x] 列级权限: 按角色禁止列访问, 数据/指标双拦截
   - [x] 数据生命周期: 保留期策略 + 状态评估
-- [ ] **M6**: 多租户 + 联邦接入 + SSO/OAuth2.0 + pgvector/Milvus + CDC 增量 + OTel
+- [ ] **M6**: 多租户 + 联邦接入 + SSO/OAuth2.0 + CDC 增量 + OTel
+  - [x] 可插拔向量后端 (M6-1): pgvector (`<=>` 余弦距离) / Milvus 适配, 接口保持业务无感
 
 ## 测试
 

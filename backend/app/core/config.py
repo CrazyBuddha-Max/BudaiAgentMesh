@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     # 允许的来源 (CORS)
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
+    # M6: 向量后端选择 (auto/brute_force/pgvector/milvus)
+    # auto: PostgreSQL 方言自动用 pgvector, 其余 (SQLite) 用全量余弦兜底
+    vector_backend: str = "auto"
+    # M6: Milvus 连接地址, 例如 http://localhost:19530 或本地文件 ./data/budai_milvus.db
+    milvus_uri: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:
