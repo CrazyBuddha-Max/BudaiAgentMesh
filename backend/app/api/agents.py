@@ -75,8 +75,19 @@ async def create_from_template(
         template = get_template(payload["template_key"])
     except KeyError as exc:
         raise BizError(f"未知模板: {exc}") from exc
+
+    # 名称去重: 固定模板名可能被其他租户/历史占用 (name 全局唯一), 自动追加序号
+    base_name = payload.get("name") or template.name
+    name = base_name
+    suffix = 2
+    while (
+        await session.execute(select(Agent).where(Agent.name == name))
+    ).scalar_one_or_none() is not None:
+        name = f"{base_name} {suffix}"
+        suffix += 1
+
     agent = Agent(
-        name=payload.get("name") or template.name,
+        name=name,
         description=template.description,
         tenant_id=user.tenant,
         llm_provider_id=payload.get("llm_provider_id"),

@@ -108,3 +108,19 @@ async def test_audit_logs_tenant_isolation():
         assert any(x["actor"] == "alice" and x["action"] == "auth.login" for x in logs)
         # 不包含 bob 的记录
         assert all(x["actor"] != "bob" for x in logs)
+
+
+@pytest.mark.anyio
+async def test_template_create_deduplicates_name():
+    """重复从模板创建: 重名自动追加序号, 不报'已存在'."""
+    async with await _client() as client:
+        tok = await _login(client, "alice", "alice123")
+        ah = _auth(tok)
+
+        names = []
+        for _ in range(2):
+            resp = await client.post("/api/agents/from-template", json={"template_key": "data-analyst"}, headers=ah)
+            assert resp.status_code == 201, resp.text
+            names.append(resp.json()["name"])
+        assert names[0] != names[1]
+        assert names[1].startswith(names[0])
