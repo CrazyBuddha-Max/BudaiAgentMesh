@@ -8,27 +8,15 @@ import {Button} from '@astryxdesign/core/Button';
 import {Card} from '@astryxdesign/core/Card';
 import {Text} from '@astryxdesign/core/Text';
 import {TextInput} from '@astryxdesign/core/TextInput';
-import {TextArea} from '@astryxdesign/core/TextArea';
 import {VStack} from '@astryxdesign/core/VStack';
 import {HStack} from '@astryxdesign/core/HStack';
 import {Badge} from '@astryxdesign/core/Badge';
 import {Selector} from '@astryxdesign/core/Selector';
-import {CheckboxList, CheckboxListItem} from '@astryxdesign/core/CheckboxList';
 import {EmptyState} from '@astryxdesign/core/EmptyState';
 import {useToast} from '@astryxdesign/core/Toast';
-import type {AgentEvent, AgentInfo, AgentTask, ToolInfo} from '@/api/types';
-import {Bot, Plus, Play, Trash2, Wrench, ListTree, Star, Layers} from 'lucide-react';
+import type {AgentInfo, ToolInfo} from '@/api/types';
+import {Bot, BrainCircuit, ChevronDown, ChevronRight, ExternalLink, Pencil, Plus, Trash2, Wrench, Layers} from 'lucide-react';
 import {useAuthStore} from '@/store/auth';
-
-const EVENT_LABEL: Record<string, {label: string; variant: string}> = {
-  task_started: {label: '任务启动', variant: 'info'},
-  plan: {label: '制定计划', variant: 'neutral'},
-  tool_call: {label: '调用工具', variant: 'blue'},
-  tool_result: {label: '工具结果', variant: 'green'},
-  retrieval: {label: '知识检索', variant: 'cyan'},
-  completion: {label: '任务完成', variant: 'success'},
-  error: {label: '执行异常', variant: 'error'},
-};
 
 export function AgentsPage() {
   const toast = useToast();
@@ -39,20 +27,21 @@ export function AgentsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [agentName, setAgentName] = useState('');
   const [agentDesc, setAgentDesc] = useState('');
-  const [agentModelId, setAgentModelId] = useState('');  // M7 绑定模型提供方
-  const [objective, setObjective] = useState('');
-  const [runTarget, setRunTarget] = useState<number | null>(null);
-  const [mainAgentId, setMainAgentId] = useState('');
-  const [collaborators, setCollaborators] = useState<string[]>([]);
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState('');
+  const [agentModelId, setAgentModelId] = useState('');
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editModelId, setEditModelId] = useState('');
+  const [expandedTool, setExpandedTool] = useState<string | null>(null);
 
   const agents = useQuery({queryKey: ['agents'], queryFn: api.listAgents});
   const tools = useQuery({queryKey: ['agent-tools'], queryFn: api.listTools});
-  const tasks = useQuery({queryKey: ['agent-tasks'], queryFn: api.listTasks});
   const templates = useQuery({queryKey: ['agent-templates'], queryFn: api.listTemplates});
   const bus = useQuery({queryKey: ['agent-bus'], queryFn: api.busStats, refetchInterval: 10_000});
-  const providers = useQuery({queryKey: ['llm-providers'], queryFn: api.llmProviders});  // M7 模型绑定
+  const providers = useQuery({queryKey: ['llm-providers'], queryFn: api.llmProviders});
+
+  const providerName = (id: number | null | undefined) =>
+    providers.data?.find((p) => p.id === id)?.name ?? (id ? `提供方#${id}` : '默认');
 
   const createAgent = useMutation({
     mutationFn: () =>
@@ -74,6 +63,21 @@ export function AgentsPage() {
     onError: (e) => toast({body: e instanceof Error ? e.message : '创建失败', type: 'error'}),
   });
 
+  const updateAgent = useMutation({
+    mutationFn: () =>
+      api.updateAgent(editId!, {
+        name: editName,
+        description: editDesc || null,
+        llm_provider_id: editModelId ? Number(editModelId) : null,
+      }),
+    onSuccess: (a) => {
+      toast({body: `Agent「${a.name}」已更新`});
+      setEditId(null);
+      qc.invalidateQueries({queryKey: ['agents']});
+    },
+    onError: (e) => toast({body: e instanceof Error ? e.message : '更新失败', type: 'error'}),
+  });
+
   const deleteAgent = useMutation({
     mutationFn: (id: number) => api.deleteAgent(id),
     onSuccess: () => {
@@ -92,43 +96,12 @@ export function AgentsPage() {
     onError: (e) => toast({body: e instanceof Error ? e.message : '创建失败', type: 'error'}),
   });
 
-  const createTask = useMutation({
-    mutationFn: (agentId: number) =>
-      api.createTask(
-        agentId,
-        objective,
-        objective.slice(0, 40),
-        collaborators.map(Number).filter((id) => id !== agentId),
-      ),
-    onSuccess: async (task) => {
-      toast({body: `任务已创建 (#${task.id}), 协作团队已集结, 开始执行`});
-      setObjective('');
-      setRunTarget(task.id);
-      qc.invalidateQueries({queryKey: ['agent-tasks']});
-      await runTask.mutateAsync(task.id);
-    },
-    onError: (e) => toast({body: e instanceof Error ? e.message : '任务创建失败', type: 'error'}),
-  });
-
-  const runTask = useMutation({
-    mutationFn: (taskId: number) => api.runTask(taskId),
-    onSuccess: () => {
-      toast({body: '任务执行完成' });
-      qc.invalidateQueries({queryKey: ['agent-tasks']});
-    },
-    onError: (e) => toast({body: e instanceof Error ? e.message : '执行失败', type: 'error'}),
-  });
-
-  const submitFeedback = useMutation({
-    mutationFn: (taskId: number) => api.submitFeedback(taskId, rating, comment || undefined),
-    onSuccess: () => {
-      toast({body: '反馈已提交, 将驱动系统迭代' });
-      setComment('');
-    },
-    onError: (e) => toast({body: e instanceof Error ? e.message : '反馈提交失败', type: 'error'}),
-  });
-
-  const agentNameOf = (id: number) => agents.data?.find((a) => a.id === id)?.name ?? `Agent#${id}`;
+  const startEdit = (a: AgentInfo) => {
+    setEditId(a.id);
+    setEditName(a.name);
+    setEditDesc(a.description ?? '');
+    setEditModelId(a.llm_provider_id ? String(a.llm_provider_id) : '');
+  };
 
   const agentColumns = [
     {key: 'name', header: 'Agent', width: proportional(1.4), renderCell: (a: AgentInfo) => (
@@ -140,52 +113,31 @@ export function AgentsPage() {
         </div>
       </HStack>
     )},
-    {key: 'capabilities', header: '能力声明', width: proportional(1.4), renderCell: (a: AgentInfo) => (
+    {key: 'model', header: '对接模型', width: proportional(0.9), renderCell: (a: AgentInfo) => (
+      <HStack gap={1} vAlign="center">
+        <BrainCircuit size={14} className="muted" />
+        <Badge label={providerName(a.llm_provider_id)} variant={a.llm_provider_id ? 'success' : 'neutral'} />
+      </HStack>
+    )},
+    {key: 'capabilities', header: '能力声明', width: proportional(1.3), renderCell: (a: AgentInfo) => (
       <HStack gap={1} wrap="wrap">
         {a.capabilities.map((c) => <Badge key={c} label={c} variant="neutral" />)}
       </HStack>
     )},
     {key: 'status', header: '状态', width: proportional(0.6), renderCell: (a: AgentInfo) => <StatusBadge status={a.status} />},
-    {key: 'actions', header: '', width: proportional(0.6), renderCell: (a: AgentInfo) => (
-      <Button
-        label="删除"
-        size="sm"
-        variant="ghost"
-        icon={<Trash2 size={13} />}
-        isDisabled={!canEdit}
-        onClick={() => deleteAgent.mutate(a.id)}
-      />
+    {key: 'actions', header: '', width: proportional(0.7), renderCell: (a: AgentInfo) => (
+      <HStack gap={1}>
+        <Button label="编辑" size="sm" variant="ghost" icon={<Pencil size={13} />} isDisabled={!canEdit} onClick={() => startEdit(a)} />
+        <Button label="删除" size="sm" variant="ghost" icon={<Trash2 size={13} />} isDisabled={!canEdit} onClick={() => deleteAgent.mutate(a.id)} />
+      </HStack>
     )},
   ];
-
-  const taskColumns = [
-    {key: 'id', header: '#', width: proportional(0.4), renderCell: (t: AgentTask) => <Text className="mono">{t.id}</Text>},
-    {key: 'objective', header: '目标', width: proportional(2), renderCell: (t: AgentTask) => (
-      <Text style={{maxWidth: 460}}>{t.objective}</Text>
-    )},
-    {key: 'status', header: '状态', width: proportional(0.7), renderCell: (t: AgentTask) => <StatusBadge status={t.status} />},
-    {key: 'result', header: '结果摘要', width: proportional(2), renderCell: (t: AgentTask) => (
-      <Text type="supporting" className="mono" style={{maxWidth: 420, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'}}>
-        {t.result?.split('\n').slice(1).join(' | ') || t.error || '--'}
-      </Text>
-    )},
-    {key: 'actions', header: '', width: proportional(0.5), renderCell: (t: AgentTask) => (
-      <Button
-        label={runTarget === t.id ? '详情' : '查看'}
-        size="sm"
-        variant="ghost"
-        onClick={() => setRunTarget(runTarget === t.id ? null : t.id)}
-      />
-    )},
-  ];
-
-  const selectedTask: AgentTask | undefined = tasks.data?.find((t) => t.id === runTarget) ?? undefined;
 
   return (
     <div className="page-stack">
       <PageHeader
         title="Agent 协同"
-        description="多 Agent 协同层: 注册中心 / 工具注册中心 (MCP) / 任务编排与事件追溯"
+        description="多 Agent 协同层: 注册中心 / 工具注册中心 (MCP) / 大模型绑定"
         actions={
           canEdit ? (
             <Button
@@ -225,23 +177,86 @@ export function AgentsPage() {
         </Card>
       )}
 
+      {/* 编辑表单 */}
+      {editId !== null && (
+        <Card variant="muted" style={{padding: 20}}>
+          <VStack gap={3}>
+            <HStack gap={2} vAlign="center">
+              <Pencil size={16} />
+              <Text weight="semibold">编辑 Agent #{editId}</Text>
+            </HStack>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12}}>
+              <TextInput label="Agent 名称" value={editName} onChange={setEditName} isRequired />
+              <TextInput label="职责描述" value={editDesc} onChange={setEditDesc} />
+            </div>
+            <Selector
+              label="对接模型"
+              value={editModelId}
+              onChange={setEditModelId}
+              options={[
+                {label: '默认提供方 (未绑定)', value: ''},
+                ...(providers.data ?? []).map((p) => ({
+                  label: `${p.name} · ${p.model}${p.is_default ? ' (默认)' : ''}`,
+                  value: String(p.id),
+                })),
+              ]}
+            />
+            <HStack gap={2} hAlign="end">
+              <Button label="取消" variant="ghost" onClick={() => setEditId(null)} />
+              <Button label="保存" variant="primary" isDisabled={!editName} isLoading={updateAgent.isPending} onClick={() => updateAgent.mutate()} />
+            </HStack>
+          </VStack>
+        </Card>
+      )}
+
       <Card variant="muted" style={{padding: 20}}>
         <VStack gap={3}>
-          <HStack gap={2} vAlign="center">
-            <Wrench size={17} />
-            <Text weight="semibold">工具注册中心 ({tools.data?.length ?? 0})</Text>
-            <Text type="supporting"><span className="muted">数据能力以标准 Schema 暴露, 已升级为完整 MCP Server (端点: /mcp/mcp)</span></Text>
+          <HStack gap={2} vAlign="center" hAlign="between">
+            <HStack gap={2} vAlign="center">
+              <Wrench size={17} />
+              <Text weight="semibold">工具注册中心 ({tools.data?.length ?? 0})</Text>
+              <Text type="supporting"><span className="muted">数据能力以标准 Schema 暴露, 由 MCP Server 供外部 Agent 调用</span></Text>
+            </HStack>
+            <Button
+              label="MCP 端点 /mcp/mcp"
+              size="sm"
+              variant="ghost"
+              icon={<ExternalLink size={13} />}
+              onClick={() => window.open('http://127.0.0.1:8000/docs', '_blank')}
+            />
           </HStack>
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12}}>
-            {(tools.data ?? []).map((t: ToolInfo) => (
-              <Card key={t.name} variant="default" style={{padding: 14}}>
-                <Text weight="semibold" className="mono">{t.name}</Text>
-                <Text type="supporting" style={{margin: '4px 0'}}><span className="muted">{t.description}</span></Text>
-                <Text type="supporting" className="mono muted">
-                  参数: {Object.keys((t.parameters.properties as Record<string, unknown>) ?? {}).join(', ') || '无'}
-                </Text>
-              </Card>
-            ))}
+            {(tools.data ?? []).map((t: ToolInfo) => {
+              const params = Object.entries((t.parameters.properties as Record<string, unknown>) ?? {});
+              const open = expandedTool === t.name;
+              return (
+                <Card
+                  key={t.name}
+                  variant="default"
+                  style={{padding: 14, cursor: 'pointer'}}
+                  onClick={() => setExpandedTool(open ? null : t.name)}
+                >
+                  <HStack gap={2} vAlign="center" hAlign="between">
+                    <Text weight="semibold" className="mono">{t.name}</Text>
+                    {open ? <ChevronDown size={14} className="muted" /> : <ChevronRight size={14} className="muted" />}
+                  </HStack>
+                  <Text type="supporting" style={{margin: '4px 0'}}><span className="muted">{t.description}</span></Text>
+                  {open && (
+                    <VStack gap={1} style={{marginTop: 8}}>
+                      <Text type="supporting" className="mono muted">参数 ({params.length}):</Text>
+                      {params.map(([k, v]) => (
+                        <Text key={k} type="supporting" className="mono muted">
+                          · <span style={{color: '#2f6db8'}}>{k}</span>: {(v as {description?: string}).description ?? (v as {type?: string}).type ?? ''}
+                        </Text>
+                      ))}
+                      <Text type="supporting" className="muted" style={{marginTop: 6}}>
+                        ↑ 通过 MCP 端点 <span className="mono">/mcp/mcp</span> 暴露给 Claude / Cursor 等外部 Agent
+                      </Text>
+                    </VStack>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         </VStack>
       </Card>
@@ -284,53 +299,6 @@ export function AgentsPage() {
         </VStack>
       </Card>
 
-      <Card variant="muted" style={{padding: 20}}>
-        <VStack gap={3}>
-          <HStack gap={2} vAlign="center">
-            <Play size={17} />
-            <Text weight="semibold">任务编排控制台</Text>
-            <Text type="supporting"><span className="muted">目标 → 知识检索 → 目录检索 → 数据采样 → 主控汇总</span></Text>
-          </HStack>
-          <div style={{display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12}}>
-            <Selector
-              label="主控 Agent"
-              value={mainAgentId}
-              onChange={(v) => setMainAgentId(v)}
-              options={(agents.data ?? []).map((a) => ({label: `${a.name} (${(a.capabilities ?? []).join('/') || '通用'})`, value: String(a.id)}))}
-              description="负责规划与汇总"
-            />
-            <CheckboxList
-              label="协作 Agent"
-              value={collaborators}
-              onChange={setCollaborators}
-              description="按能力分工: 检索员 / 分析员, 可多选"
-            >
-              {(agents.data ?? []).map((a) => (
-                <CheckboxListItem key={a.id} label={`${a.name} (${(a.capabilities ?? []).join('/') || '通用'})`} value={String(a.id)} />
-              ))}
-            </CheckboxList>
-          </div>
-          <HStack gap={2} vAlign="end">
-            <TextArea
-              label="任务目标"
-              value={objective}
-              onChange={setObjective}
-              rows={2}
-              placeholder="例如: 分析订单数据, 参考毛利率口径说明"
-              style={{flex: 1}}
-            />
-            <Button
-              label="创建并执行"
-              variant="primary"
-              icon={<ListTree size={14} />}
-              isDisabled={!canEdit || !objective.trim() || !mainAgentId}
-              isLoading={createTask.isPending || runTask.isPending}
-              onClick={() => createTask.mutate(Number(mainAgentId))}
-            />
-          </HStack>
-        </VStack>
-      </Card>
-
       <div>
         <Text weight="semibold" style={{marginBottom: 8}}>Agent 注册中心 ({agents.data?.length ?? 0})</Text>
         {agents.isLoading ? (
@@ -338,105 +306,9 @@ export function AgentsPage() {
         ) : agents.data && agents.data.length > 0 ? (
           <Table data={agents.data as never} columns={agentColumns as never} density="compact" dividers="rows" hasHover />
         ) : (
-          <EmptyState title="尚未注册 Agent" description="注册第一个 Agent, 开始编排数据任务" />
+          <EmptyState title="尚未注册 Agent" description="注册第一个 Agent, 再到问答工作台发起任务" />
         )}
       </div>
-
-      <div>
-        <Text weight="semibold" style={{marginBottom: 8}}>任务记录 ({tasks.data?.length ?? 0})</Text>
-        {tasks.data && tasks.data.length > 0 ? (
-          <Table data={tasks.data as never} columns={taskColumns as never} density="compact" dividers="rows" hasHover />
-        ) : (
-          <Text type="supporting"><span className="muted">暂无任务, 在上方控制台发起第一个任务</span></Text>
-        )}
-      </div>
-
-      {selectedTask && (
-        <Card variant="muted" style={{padding: 20}}>
-          <VStack gap={3}>
-            <HStack gap={2} vAlign="center" hAlign="between">
-              <HStack gap={2} vAlign="center">
-                <ListTree size={17} />
-                <Text weight="semibold">任务 #{selectedTask.id} 执行链路</Text>
-                <StatusBadge status={selectedTask.status} />
-              </HStack>
-              <Text type="supporting" className="mono muted">{selectedTask.created_at.slice(0, 19).replace('T', ' ')}</Text>
-            </HStack>
-
-            <VStack gap={1}>
-              {selectedTask.events.map((e: AgentEvent) => {
-                const meta = EVENT_LABEL[e.event_type] ?? {label: e.event_type, variant: 'neutral'};
-                const payload = e.payload as Record<string, unknown> | null;
-                const summary =
-                  e.event_type === 'tool_call'
-                    ? `工具 ${String(payload?.tool ?? '')} 参数 ${JSON.stringify(payload?.args ?? {})}`
-                    : e.event_type === 'tool_result'
-                      ? String(payload?.summary ?? '')
-                      : e.event_type === 'plan'
-                        ? String((payload?.steps as string[])?.join(' → ') ?? '')
-                        : e.event_type === 'task_started'
-                          ? String(payload?.objective ?? '')
-                          : String(payload?.message ?? payload?.reason ?? '');
-                return (
-                  <HStack key={e.id} gap={2} vAlign="start">
-                    <Badge label={meta.label} variant={meta.variant as never} />
-                    <Badge label={agentNameOf(e.agent_id)} variant="neutral" />
-                    <Text type="supporting" className="mono" style={{flex: 1}}>{summary || '--'}</Text>
-                  </HStack>
-                );
-              })}
-              {selectedTask.events.length === 0 && <Text type="supporting"><span className="muted">暂无事件</span></Text>}
-            </VStack>
-
-            {selectedTask.result && (
-              <Card variant="default" style={{padding: 14}}>
-                <Text weight="semibold" style={{marginBottom: 6}}>执行结果</Text>
-                <Text type="body" className="mono" style={{whiteSpace: 'pre-wrap'}}>{selectedTask.result}</Text>
-              </Card>
-            )}
-
-            {/* M3: 反馈闭环 */}
-            {selectedTask.status === 'succeeded' && (
-              <Card variant="default" style={{padding: 14}}>
-                <VStack gap={2}>
-                  <HStack gap={2} vAlign="center">
-                    <Star size={15} className="muted" />
-                    <Text weight="semibold">效果反馈</Text>
-                    <Text type="supporting"><span className="muted">评分将驱动知识修正与检索优化</span></Text>
-                  </HStack>
-                  <HStack gap={1}>
-                    {[1, 2, 3, 4, 5].map((v) => (
-                      <Button
-                        key={v}
-                        label={String(v)}
-                        size="sm"
-                        variant={rating === v ? 'primary' : 'ghost'}
-                        onClick={() => setRating(v)}
-                      />
-                    ))}
-                  </HStack>
-                  <HStack gap={2} vAlign="end">
-                    <TextInput
-                      label="评论 (可选)"
-                      value={comment}
-                      onChange={setComment}
-                      placeholder="结果是否准确? 有哪些改进空间?"
-                      style={{flex: 1}}
-                    />
-                    <Button
-                      label="提交反馈"
-                      variant="primary"
-                      isLoading={submitFeedback.isPending}
-                      isDisabled={!canEdit}
-                      onClick={() => submitFeedback.mutate(selectedTask.id)}
-                    />
-                  </HStack>
-                </VStack>
-              </Card>
-            )}
-          </VStack>
-        </Card>
-      )}
     </div>
   );
 }

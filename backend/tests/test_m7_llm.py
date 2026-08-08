@@ -201,3 +201,47 @@ async def test_orchestration_llm_plan_and_summary(monkeypatch):
 
         # 清理
         await client.delete(f"/api/agents/{agent_id}", headers=ah)
+
+
+# ---------- Agent 编辑模型绑定 (M7) ----------
+
+
+@pytest.mark.anyio
+async def test_agent_edit_llm_provider_binding():
+    """创建 Agent -> 编辑绑定模型 -> 更新名称/描述 -> 解除绑定."""
+    async with await _client() as client:
+        token = await _login(client)
+        ah = _auth(token)
+
+        # 建提供方
+        resp = await client.post("/api/agents/llm/providers", json=_payload(name="绑定用模型"), headers=ah)
+        pid = resp.json()["id"]
+
+        # 建 Agent
+        resp = await client.post(
+            "/api/agents", json={"name": "可编辑 Agent", "capabilities": ["data_access"]}, headers=ah
+        )
+        agent_id = resp.json()["id"]
+
+        # 编辑: 绑定模型 + 改名
+        resp = await client.patch(
+            f"/api/agents/{agent_id}",
+            json={"llm_provider_id": pid, "name": "可编辑 Agent v2", "description": "已编辑"},
+            headers=ah,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["llm_provider_id"] == pid
+        assert body["name"] == "可编辑 Agent v2"
+
+        # 解除绑定
+        resp = await client.patch(f"/api/agents/{agent_id}", json={"llm_provider_id": None}, headers=ah)
+        assert resp.json()["llm_provider_id"] is None
+
+        # 绑定不存在的提供方 -> 404
+        resp = await client.patch(f"/api/agents/{agent_id}", json={"llm_provider_id": 99999}, headers=ah)
+        assert resp.status_code == 404
+
+        # 清理
+        await client.delete(f"/api/agents/{agent_id}", headers=ah)
+        await client.delete(f"/api/agents/llm/providers/{pid}", headers=ah)

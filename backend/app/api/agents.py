@@ -130,6 +130,29 @@ async def remove_agent(agent_id: int, user: AnalystDep, session: AsyncSession = 
         await session.commit()
 
 
+@router.patch("/{agent_id}", response_model=AgentOut)
+async def patch_agent(
+    agent_id: int, payload: dict, user: AnalystDep, session: AsyncSession = SessionDep
+) -> AgentOut:
+    """编辑 Agent (M7): 名称/描述/绑定的模型提供方/状态/能力."""
+    from app.agents.orchestration import get_agent
+
+    agent = await get_agent(session, agent_id)
+    if "llm_provider_id" in payload:
+        provider_id = payload.get("llm_provider_id")
+        if provider_id is not None:
+            from app.agents.llm import get_provider
+
+            await get_provider(session, int(provider_id))  # 校验存在
+        agent.llm_provider_id = int(provider_id) if provider_id else None
+    for field in ("name", "description", "status", "capabilities", "tools"):
+        if field in payload and payload[field] is not None:
+            setattr(agent, field, payload[field])
+    await session.commit()
+    await session.refresh(agent)
+    return await _agent_out(session, agent)
+
+
 @router.get("/tools", response_model=list[ToolInfo])
 async def tools(user: CurrentUserDep, session: AsyncSession = SessionDep) -> list[ToolInfo]:
     """工具注册中心: 数据能力以标准 Schema 暴露 (MCP 雏形)."""

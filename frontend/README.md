@@ -33,7 +33,9 @@ start_dev.bat        :: npm install + vite dev
 - `/catalog` 元数据目录: 表与字段检索、质量初检画像
 - `/knowledge` 知识工作台: 文档上传入库 (txt/md/html/pdf), 语义检索
 - `/metrics` 指标语义层: 统一口径定义、聚合查询与维度下钻
-- `/agents` Agent 协同: Agent 注册、工具注册中心、任务编排与事件链路
+- `/agents` Agent 协同: Agent 注册/编辑/删除、模型绑定、工具注册中心 (可点击展开)、模板市场
+- `/tasks` 问答工作台: 向系统提问, 多 Agent 协作执行 (检索→分析→LLM 汇总), 执行链路与反馈
+- `/models` 大模型接入: 管理 OpenAI/DeepSeek/通义/Ollama 等提供方, 测试连接/设默认
 - `/security` 安全治理: RBAC 矩阵、脱敏、列权限、审计、血缘、生命周期、多租户、联邦接入 (M6)
 - `/observability` 运行观测: 请求量、时延、错误率、状态码分布、反馈统计
 

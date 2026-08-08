@@ -175,6 +175,8 @@ export const api = {
   createAgent: (payload: {name: string; description?: string; llm_provider_id?: number | null; capabilities?: string[]; tools?: string[]}) =>
     request<AgentInfo>('/agents', {method: 'POST', body: JSON.stringify(payload)}),
   deleteAgent: (id: number) => request<void>(`/agents/${id}`, {method: 'DELETE'}),
+  updateAgent: (id: number, payload: Record<string, unknown>) =>
+    request<AgentInfo>(`/agents/${id}`, {method: 'PATCH', body: JSON.stringify(payload)}),
   listTools: () => request<ToolInfo[]>('/agents/tools'),
   listTemplates: () => request<AgentTemplate[]>('/agents/templates'),
   createFromTemplate: (templateKey: string, name?: string) =>

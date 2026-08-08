@@ -10,6 +10,7 @@ import {ObservabilityPage} from '@/pages/ObservabilityPage';
 import {MetricsPage} from '@/pages/MetricsPage';
 import {KnowledgePage} from '@/pages/KnowledgePage';
 import {AgentsPage} from '@/pages/AgentsPage';
+import {TasksPage} from '@/pages/TasksPage';
 import {ModelsPage} from '@/pages/ModelsPage';
 
 function Protected({children}: {children: React.ReactNode}) {
@@ -38,6 +39,7 @@ export function App() {
           <Route path="/knowledge" element={<KnowledgePage />} />
           <Route path="/metrics" element={<MetricsPage />} />
           <Route path="/agents" element={<AgentsPage />} />
+          <Route path="/tasks" element={<TasksPage />} />
           <Route path="/models" element={<ModelsPage />} />
           <Route path="/security" element={<SecurityPage />} />
           <Route path="/observability" element={<ObservabilityPage />} />

@@ -8,7 +8,7 @@ import {Divider} from '@astryxdesign/core/Divider';
 import {Text} from '@astryxdesign/core/Text';
 import {IconButton} from '@astryxdesign/core/IconButton';
 import {useNavigate, useLocation, Outlet} from 'react-router';
-import {Database, FolderSearch, Shield, Activity, LayoutGrid, LogOut, Calculator, Sun, Moon, Monitor, BookOpen, Bot, Boxes, BrainCircuit} from 'lucide-react';
+import {Database, FolderSearch, Shield, Activity, LayoutGrid, LogOut, Calculator, Sun, Moon, Monitor, BookOpen, Bot, Boxes, BrainCircuit, MessageSquareText} from 'lucide-react';
 import {useAuthStore} from '@/store/auth';
 import {useThemeStore} from '@/store/theme';
 import {SegmentedControl, SegmentedControlItem} from '@astryxdesign/core/SegmentedControl';
@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   {path: '/knowledge', label: '知识工作台', icon: <BookOpen size={17} />},
   {path: '/metrics', label: '指标语义', icon: <Calculator size={17} />},
   {path: '/agents', label: 'Agent 协同', icon: <Bot size={17} />},
+  {path: '/tasks', label: '问答工作台', icon: <MessageSquareText size={17} />},
   {path: '/models', label: '大模型接入', icon: <BrainCircuit size={17} />},
   {path: '/security', label: '安全治理', icon: <Shield size={17} />},
   {path: '/observability', label: '运行观测', icon: <Activity size={17} />},
