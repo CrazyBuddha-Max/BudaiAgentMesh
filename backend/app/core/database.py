@@ -55,8 +55,12 @@ _ADD_COLUMNS: dict[str, list[tuple[str, str]]] = {
         ("collaborators", "JSON"),  # M4 协作 Agent
         ("tenant_id", "VARCHAR(64)"),  # M7 多租户
     ],
-    "agents": [("llm_provider_id", "INTEGER")],  # M7 绑定模型提供方
+    "agents": [
+        ("llm_provider_id", "INTEGER"),  # M7 绑定模型提供方
+        ("tenant_id", "VARCHAR(64)"),  # M7 多租户
+    ],
     "knowledge_docs": [("tenant_id", "VARCHAR(64)")],  # M7 多租户
+    "knowledge_chunks": [("tenant_id", "VARCHAR(64)")],  # M7 多租户
     "metric_definitions": [("tenant_id", "VARCHAR(64)")],  # M7 多租户
     "audit_logs": [("tenant_id", "VARCHAR(64)")],  # M7 多租户
 }
@@ -78,3 +82,5 @@ async def _light_migrations() -> None:
             for column, dtype in columns:
                 if column not in existing:
                     await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {dtype}"))
+                    if column == "tenant_id":  # 存量数据归 default 租户
+                        await conn.execute(text(f"UPDATE {table} SET {column}='default' WHERE {column} IS NULL"))
