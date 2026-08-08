@@ -186,6 +186,14 @@ async def run_agent_task(task_id: int, user: AnalystDep, session: AsyncSession =
 
 # ---------- 大模型接入 (M7) ----------
 
+@router.get("/capabilities")
+async def capabilities(user: CurrentUserDep) -> list[dict]:
+    """能力注册表: 新建 Agent 时动态选择能力 (新增能力无需改代码)."""
+    from app.agents.capabilities import capabilities_out
+
+    return capabilities_out()
+
+
 @router.get("/llm/providers", response_model=list[LLMProviderOut])
 async def llm_providers(user: CurrentUserDep, session: AsyncSession = SessionDep):
     """模型提供方列表 (密钥不回显)."""

@@ -172,6 +172,7 @@ export const api = {
   // 多 Agent 协同层
   listAgents: () => request<AgentInfo[]>('/agents'),
   agents: () => request<AgentInfo[]>('/agents'),
+  capabilities: () => request<{code: string; label: string; description: string; tools: string[]}[]>('/agents/capabilities'),
   createAgent: (payload: {name: string; description?: string; llm_provider_id?: number | null; capabilities?: string[]; tools?: string[]}) =>
     request<AgentInfo>('/agents', {method: 'POST', body: JSON.stringify(payload)}),
   deleteAgent: (id: number) => request<void>(`/agents/${id}`, {method: 'DELETE'}),

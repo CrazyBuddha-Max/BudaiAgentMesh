@@ -12,6 +12,7 @@ import {VStack} from '@astryxdesign/core/VStack';
 import {HStack} from '@astryxdesign/core/HStack';
 import {Badge} from '@astryxdesign/core/Badge';
 import {Selector} from '@astryxdesign/core/Selector';
+import {CheckboxList, CheckboxListItem} from '@astryxdesign/core/CheckboxList';
 import {EmptyState} from '@astryxdesign/core/EmptyState';
 import {useToast} from '@astryxdesign/core/Toast';
 import type {AgentInfo, ToolInfo} from '@/api/types';
@@ -28,6 +29,7 @@ export function AgentsPage() {
   const [agentName, setAgentName] = useState('');
   const [agentDesc, setAgentDesc] = useState('');
   const [agentModelId, setAgentModelId] = useState('');
+  const [agentCaps, setAgentCaps] = useState<string[]>(['knowledge_retrieval', 'data_access']);
   const [editId, setEditId] = useState<number | null>(null);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
@@ -39,6 +41,7 @@ export function AgentsPage() {
   const templates = useQuery({queryKey: ['agent-templates'], queryFn: api.listTemplates});
   const bus = useQuery({queryKey: ['agent-bus'], queryFn: api.busStats, refetchInterval: 10_000});
   const providers = useQuery({queryKey: ['llm-providers'], queryFn: api.llmProviders});
+  const caps = useQuery({queryKey: ['agent-capabilities'], queryFn: api.capabilities});
 
   const providerName = (id: number | null | undefined) =>
     providers.data?.find((p) => p.id === id)?.name ?? (id ? `提供方#${id}` : '默认');
@@ -49,7 +52,7 @@ export function AgentsPage() {
         name: agentName,
         description: agentDesc || undefined,
         llm_provider_id: agentModelId ? Number(agentModelId) : null,
-        capabilities: ['knowledge_retrieval', 'data_access'],
+        capabilities: agentCaps,
         tools: [],
       }),
     onSuccess: (a) => {
@@ -58,6 +61,7 @@ export function AgentsPage() {
       setAgentName('');
       setAgentDesc('');
       setAgentModelId('');
+      setAgentCaps(['knowledge_retrieval', 'data_access']);
       qc.invalidateQueries({queryKey: ['agents']});
     },
     onError: (e) => toast({body: e instanceof Error ? e.message : '创建失败', type: 'error'}),
@@ -158,6 +162,16 @@ export function AgentsPage() {
               <TextInput label="Agent 名称" value={agentName} onChange={setAgentName} isRequired placeholder="如 经营分析助手" />
               <TextInput label="职责描述" value={agentDesc} onChange={setAgentDesc} placeholder="负责检索业务口径并定位数据" />
             </div>
+            <CheckboxList
+              label="能力声明 (来自能力注册表, 可多选)"
+              value={agentCaps}
+              onChange={setAgentCaps}
+              description="编排会按能力动态分工; 新能力在注册表声明即可"
+            >
+              {(caps.data ?? []).map((c) => (
+                <CheckboxListItem key={c.code} label={`${c.label} (${c.code}) · ${c.description}`} value={c.code} />
+              ))}
+            </CheckboxList>
             <Selector
               label="对接模型 (留空 = 默认提供方)"
               value={agentModelId}
