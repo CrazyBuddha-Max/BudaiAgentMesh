@@ -1,7 +1,7 @@
 # BudaiAgentMesh 智能体数据中台 — 系统整体架构设计
 
-> 版本: v0.1 (架构设计稿)
-> 状态: 设计阶段
+> 版本: v0.2 (已落地实现)
+> 状态: M1–M6 已完成 (2026-08), 本文标注 ✓ 为已实现项, 其余为演进展望
 > 定位: 面向 AI Agent 生态的"数据操作系统"，向下整合企业数据资产，向上赋能智能体高效、安全、协同地工作。
 
 ---
@@ -56,7 +56,7 @@ BudaiAgentMesh 不是简单的数据库或数据仓库，而是专门为 AI Agen
 |  +--------------------------------------------------------------------------------+|
 |  +--------------------------------------------------------------------------------+|
 |  | ④ 安全治理层  Security & Governance                                             ||
-|  |  IAM/RBAC/ABAC · 行列单元级权限 · 动态脱敏 · 敏感识别 · 审计 · 生命周期 · 血缘    ||
+|  |  IAM/JWT/RBAC/SSO · 多租户隔离 · 列级权限 · 动态脱敏 · 审计 · 生命周期 · 血缘  ||
 |  +--------------------------------------------------------------------------------+|
 |  +--------------------------------------------------------------------------------+|
 |  | ③ 多 Agent 协同层  Agent Collaboration                                          ||
@@ -95,39 +95,30 @@ BudaiAgentMesh 不是简单的数据库或数据仓库，而是专门为 AI Agen
 
 **目标**: 向下整合企业数据资产 —— "接入即治理，接入即目录"。
 
-**核心模块**:
+**核心模块 (已实现 ✓ / 展望):**
 
 1. **连接器市场 (Connector Marketplace)**
-   - 关系型: MySQL / PostgreSQL / Oracle / SQL Server
-   - 非关系型: MongoDB / Redis / Elasticsearch
-   - 消息流: Kafka / RabbitMQ / Pulsar
-   - 文件: CSV / Excel / Parquet / JSON / 日志
-   - API: REST / GraphQL / OpenAPI 导入
-   - 湖仓: S3 / HDFS / Iceberg / Delta Lake / Hudi
-   - SaaS: 飞书 / 钉钉 / 企业微信 / 主流 CRM / ERP
-   - 连接器协议化: 每个连接器实现统一的 `SourceContract` (发现/采样/读取/增量标记)
+   - ✓ PostgreSQL / MySQL / CSV (统一 `SourceContract`: 发现/采样/聚合/增量检测)
+   - 展望: Oracle / SQL Server / MongoDB / Kafka / S3 / SaaS 连接器
 
 2. **采集引擎 (Ingestion Engine)**
-   - 批量: 定时调度 + 增量 watermark
-   - 实时: CDC (Debezium) + 消息订阅
-   - 批流一体: 同一份逻辑，批量/实时两套执行器
-   - 断点续传与幂等写入
+   - ✓ 批量采集 + 增量 watermark 指纹 (CSV 文件指纹; PG/MySQL 表指纹: 行数+列集合)
+   - ✓ 采集任务留痕 (ingestion_runs)
+   - 展望: Debezium 级 CDC、断点续传、批流一体
 
 3. **Schema 注册中心 (Schema Registry)**
-   - 自动 schema 推断、版本化、兼容性校验
-   - 字段级业务口径绑定 (业务术语 ↔ 物理字段映射)
-   - 为下游 Agent 提供"契约化"读取
+   - ✓ 自动 schema 推断 (information_schema 扫描) + 字段质量画像
+   - 展望: 版本化、兼容性校验、口径绑定
 
 4. **数据质量初检 (Pre-Quality)**
-   - 完整性 / 唯一性 / 空值率 / 值域 / 波动异常
-   - 质量评分写入元数据，供 Agent 检索时按质量排序
+   - ✓ 空值率 / 区分度 / 采样值 → 表级质量分
 
 5. **元数据目录 (Metadata Catalog)**
-   - 自动扫描 + 打标签 (业务域/敏感级/质量级)
-   - 数据字典、业务术语表、数据所有者 (Data Owner)
-   - 统一搜索: 语义搜索 + 标签搜索
+   - ✓ 数据源 CRUD / 表列检索 / 目录统计 / 数据样例查询
+   - ✓ **多租户隔离 (M6)**: 目录按 tenant 硬隔离
+   - ✓ **联邦接入 (M6)**: 远端实例目录/数据 Bearer 透传, 并发检索
 
-**技术选型**: Python `asyncio` + 连接器插件化框架，调度用 Celery/APScheduler，CDC 用 Debezium，目录存 PostgreSQL，血缘图存 Neo4j。
+**技术选型**: Python `asyncio` + 连接器插件化 (装饰器注册), 目录存 PostgreSQL/SQLite, 增量用 watermark 指纹 (M6).
 
 ---
 
@@ -135,34 +126,28 @@ BudaiAgentMesh 不是简单的数据库或数据仓库，而是专门为 AI Agen
 
 **目标**: 把"数据"沉淀为"知识" —— 让 Agent 检索到的不只是记录，而是口径正确的业务知识。
 
-**核心模块**:
+**核心模块 (已实现 ✓ / 展望):**
 
 1. **RAG 流水线 (Document Intelligence)**
-   - 解析: PDF / Word / Markdown / HTML / 表格 → 结构化 chunk
-   - 切分: 语义切分 + 递归字符切分混合策略，带结构元数据 (标题层级/来源/页码)
-   - 向量化: Embedding 服务 (支持多模型可插拔)
-   - 入库: 向量 + 原文 + 元数据 + 指纹去重 + 增量更新
+   - ✓ 解析: PDF / Markdown / HTML / TXT → 结构化 chunk (PyMuPDF)
+   - ✓ 切分: 段落优先 + 重叠窗口
+   - ✓ 向量化: HashEmbedder (离线兜底) / OpenAI (可插拔)
+   - ✓ 检索: 可插拔向量后端 (全量余弦 / pgvector `<=>` / Milvus), 接口无感
 
 2. **知识图谱 (Knowledge Graph)**
-   - 实体抽取与关系构建 (组织/产品/人员/指标/文档 等)
-   - 支撑多跳推理、口径溯源、权限传导
-   - 存储: Neo4j
+   - ✓ 轻量数据血缘 (源表 → 指标 → 任务 → 结果)
+   - 展望: 实体抽取与关系图谱 (Neo4j)
 
 3. **指标语义层 (Semantic Metrics Layer)**
-   - 统一指标定义 (口径/维度/粒度/公式)，消除"同名不同义"
-   - 指标 ↔ 物理表映射，自动生成可执行查询
-   - Agent 调用指标时拿到的是"口径正确的数字 + 可追溯的定义"
+   - ✓ 指标定义 CRUD + 表达式白名单校验 + 聚合查询/维度下钻/越权拦截
 
 4. **Agent 记忆 (Agent Memory)**
-   - 长期记忆: 业务事实、用户偏好、场景上下文
-   - 短期记忆: 会话工作上下文
-   - 经验沉淀: 成功案例 / 失败教训 / 最佳实践，任务完成后自动沉淀
+   - 展望: 长期/短期/经验记忆
 
 5. **知识质量管理**
-   - 覆盖率 / 新鲜度 / 命中率监控
-   - 知识版本管理，回滚与 A/B
+   - 展望: 覆盖率 / 新鲜度 / RAGAS 评估
 
-**技术选型**: 向量库 Milvus (或 pgvector 起步)，图谱 Neo4j，Embedding 可插拔 (OpenAI/本地 BGE 等)，解析用 unstructured / PyMuPDF / markitdown。
+**技术选型**: 向量库 pgvector/Milvus (M6 可插拔), Embedding 可插拔 (OpenAI/本地哈希), 解析 PyMuPDF.
 
 ---
 
@@ -170,31 +155,27 @@ BudaiAgentMesh 不是简单的数据库或数据仓库，而是专门为 AI Agen
 
 **目标**: 向上赋能智能体 —— 让外部 Agent 与内部子 Agent 安全、有序、共享地工作。
 
-**核心模块**:
+**核心模块 (已实现 ✓ / 展望):**
 
 1. **Agent 注册中心 (Agent Registry)**
-   - Agent 身份、能力声明 (Capability Manifest)、权限范围、SLA
-   - 生命周期管理 (注册/启停/版本/下线)
+   - ✓ Agent 身份 / 能力声明 (Capability Manifest) / 状态管理
+   - ✓ Agent 模板市场 (M4): 5 个预置角色模板一键创建
 
 2. **编排引擎 (Orchestration Engine)**
-   - 编排模式: Pipeline (流水线) / Hierarchical (主从) / Swarm (群组) / Debate (辩论校验)
-   - 任务分解 (Task Decomposition) + DAG 调度
-   - 上下文传递与结果汇聚，超时/重试/降级策略
+   - ✓ Pipeline 编排 + 真并行 DAG (asyncio.gather, 各分支独立会话)
+   - 展望: 超时/重试/降级策略、Swarm/Debate 模式
 
 3. **消息总线 (Message Bus)**
-   - 事件驱动协作: 任务事件、结果事件、数据变更事件
-   - 共享上下文存储 (Shared Context Store)，防止上下文爆炸
+   - ✓ 进程内队列 + Worker 分发; 配置 `KAFKA_BROKERS` 自动切 Kafka 适配器
+   - ✓ 事件直落库 + 总线发布
 
 4. **工具注册中心 (Tool Registry, MCP)**
-   - 数据能力以标准工具暴露: 数据查询 / 指标计算 / 报表生成 / 知识检索 / 血缘查询
-   - 协议: Model Context Protocol (MCP) + Function Calling
-   - 工具级权限与配额 (谁能用、用几次、每次多少数据量)
+   - ✓ 数据能力以标准工具暴露 (JSON Schema): 知识检索 / 目录检索 / 数据查询 / 指标查询
+   - ✓ 完整 MCP Server (M5): `/mcp/mcp` (streamable-http), 任意 MCP 客户端可调用
 
 5. **统一 Agent API**
-   - 供外部智能体接入的网关 (REST/SSE/WebSocket)
-   - 请求 → 鉴权 → 数据装配 → 工具执行 → 结果审计 → 反馈回流，全链路可追踪 (Trace ID)
-
-**技术选型**: FastAPI + asyncio，编排可选用 LangGraph / 自研 DAG 引擎，消息总线 Kafka + Redis Streams，MCP SDK (Python)。
+   - ✓ REST 任务接口 (创建/执行/事件链路/反馈)
+   - 展望: SSE/WebSocket 网关、Trace ID 全链路
 
 ---
 
@@ -202,33 +183,31 @@ BudaiAgentMesh 不是简单的数据库或数据仓库，而是专门为 AI Agen
 
 **目标**: 每一次数据供给都"可授权、可脱敏、可审计、可溯源"。
 
-**核心模块**:
+**核心模块 (已实现 ✓ / 展望):**
 
 1. **身份与访问 (IAM)**
-   - SSO / OAuth2.0 / JWT 认证，支持企业内部 IdP
-   - RBAC + ABAC 混合授权模型 (角色 + 属性策略: 部门/地域/时间/上下文)
+   - ✓ JWT 签发/校验 + 内置账号 RBAC 三级角色 (viewer/analyst/admin)
+   - ✓ **SSO / OAuth2.0 (M6)**: 通用 OIDC 授权码流 + 内置演示 IdP (`/mock-idp`)
+   - ✓ **多租户 (M6)**: JWT 携带 tenant 声明, 数据接入层硬隔离 (越权视为不存在)
+   - 展望: ABAC 策略引擎 (OPA)、Keycloak 接入
 
 2. **精细化数据权限 (Fine-Grained ACL)**
-   - 行级 (Row) / 列级 (Column) / 单元格级 (Cell) 权限
-   - 权限基于图谱血缘传导: 派生数据自动继承源权限
-   - **上下文感知授权**: 同一数据，不同 Agent 场景下可见范围不同
+   - ✓ 列级权限 (M5): 按角色禁止访问列, 数据采样/指标维度双拦截
+   - 展望: 行级/单元格级、血缘传导继承
 
 3. **隐私与脱敏 (Privacy & Masking)**
-   - 敏感数据自动识别 (PII/财务/密钥)
-   - 动态脱敏: 掩码 / 泛化 / 扰动 / 令牌化，按消费者身份动态生效
-   - 传输 TLS，静态 AES-256，密钥托管
+   - ✓ 敏感列自动识别 (手机/身份证/银行卡/邮箱/姓名/地址) + 按角色动态掩码
+   - 展望: 泛化/扰动/令牌化、静态加密分列
 
 4. **审计与追溯 (Audit & Lineage)**
-   - 全链路操作审计日志 (谁/何时/查了什么/返回了什么)
-   - 数据血缘: 源表 → 加工 → 知识 → Agent 输出，全链路可追溯
-   - 审计日志不可篡改 (追加式存储)
+   - ✓ 全链路审计日志 (登录/采集/指标/采样/Agent 任务), 独立会话写入
+   - ✓ 数据血缘: 源表 → 指标 → 任务 → 结果 图结构
 
 5. **合规治理 (Compliance)**
-   - 数据生命周期管理 (保留期限 / 归档 / 销毁)
-   - 数据质量规则引擎、数据字典、数据所有者制度
-   - 支持 PIPL / GDPR 等合规要求
+   - ✓ 数据生命周期 (M5): 保留期策略 + 状态评估 (活跃/临期/过期)
+   - ✓ 口令 Fernet 加密存储
 
-**技术选型**: Keycloak (或自研 IAM) + PostgreSQL 策略存储 + OPA (Open Policy Agent) 策略引擎 + OpenTelemetry 审计采集。
+**技术选型**: 自研 JWT/RBAC + 内置 OIDC 客户端 (M6) + Fernet 加密, 审计/血缘存 PostgreSQL/SQLite.
 
 ---
 
@@ -236,32 +215,30 @@ BudaiAgentMesh 不是简单的数据库或数据仓库，而是专门为 AI Agen
 
 **目标**: 让每一次执行都留下数据，驱动系统持续进化 —— "用得好，系统才会越来越好用"。
 
-**核心模块**:
+**核心模块 (已实现 ✓ / 展望):**
 
 1. **运行指标监控 (Runtime Metrics)**
-   - Agent 任务: 成功率 / 响应时延 / Token 消耗 / 成本 / 重试率
-   - 数据服务: 查询时延 / 命中率 / 错误率
-   - 实时看板 + 告警
+   - ✓ 请求量 / 平均时延 / P95 / 错误率 / 状态码分布 (滑动窗口)
+   - 展望: 任务成功率/Token 成本、告警
 
 2. **质量评估 (Quality Evaluation)**
-   - 数据质量评分趋势
-   - 知识检索质量: 命中率 / MRR / NDCG / 上下文利用率
-   - RAG 评估 (RAGAS 风格): 忠实度 / 答案相关性 / 上下文相关性
+   - ✓ 数据质量评分 (空值率/区分度)
+   - 展望: MRR / NDCG / RAGAS
 
 3. **反馈采集 (Feedback Capture)**
-   - 显式反馈: 点赞 / 点踩 / 评分 / 人工标注
-   - 隐式反馈: 采纳率 / 点击 / 停留 / 二次修改
-   - 反馈与具体数据条目、Agent、工具、场景绑定
+   - ✓ Agent 任务 1-5 星评分 + 评论, 与任务绑定可回溯
+   - ✓ 评分统计 (by_rating / avg) 驱动迭代
 
 4. **Trace 与血缘可视化 (Observability)**
-   - LLM Trace: 请求 → 检索 → 上下文 → 生成，全链路
-   - 数据血缘可视化: 从 Agent 答案反向追溯到底层数据
+   - ✓ **OTel (M6)**: OTLP/HTTP span 上报 (采集/入库), 零额外依赖, 未配置零开销
+   - ✓ 数据血缘图查询
+   - 展望: LLM 全链路 Trace (请求→检索→生成)
 
 5. **迭代闭环 (Iteration Loop)**
-   - 反馈 → 知识修正 (删错补缺) → 检索优化 (重排/RAG 策略) → 提示词优化 → 指标再评估
-   - 偏好数据回流，支撑后续微调 / RLHF 数据积累
+   - ✓ 反馈 → 统计 → 展示 (驱动人工迭代)
+   - 展望: 自动知识修正 / 检索重排
 
-**技术选型**: Prometheus + Grafana (指标)，OpenTelemetry + LangSmith (Trace)，反馈存 PostgreSQL + 时序表。
+**技术选型**: 进程内指标 (M1) + OTLP/HTTP 遥测 (M6) + 反馈存 PostgreSQL/SQLite.
 
 ---
 
@@ -322,57 +299,64 @@ BudaiAgentMesh 不是简单的数据库或数据仓库，而是专门为 AI Agen
 
 ---
 
-## 6. 代码目录规划
+## 6. 代码目录规划 (已对齐实际)
 
 ```
 BudaiAgentMesh/
-├── README.md                     # 项目总览
+├── README.md                     # 项目总览与进度
 ├── docs/
 │   ├── ARCHITECTURE.md           # 本文档
-│   ├── api-contracts/            # 接口契约 (OpenAPI/MCP)
-│   └── design/                   # 领域设计、数据模型
+│   └── USER_GUIDE.md             # 15 分钟上手教程
 ├── backend/                      # Python 后端 (分层包)
 │   ├── app/
-│   │   ├── api/                  # FastAPI 路由 (五层各一个模块)
+│   │   ├── api/                  # FastAPI 路由 (access/agents/knowledge/security/feedback/health)
 │   │   ├── access/               # ① 数据统一接入层
-│   │   │   ├── connectors/       #    连接器市场
-│   │   │   ├── ingestion/        #    采集引擎
-│   │   │   └── catalog/          #    元数据目录
+│   │   │   ├── connectors/       #    连接器市场 (csv/mysql/postgres/expr)
+│   │   │   ├── ingestion.py      #    采集引擎 (含 M6 增量指纹检测)
+│   │   │   ├── catalog.py        #    元数据目录 (含 M6 多租户隔离)
+│   │   │   ├── federated.py      #    联邦接入 (M6)
+│   │   │   └── crypto.py         #    Fernet 口令加密
 │   │   ├── knowledge/            # ② 知识沉淀层
-│   │   │   ├── rag/              #    RAG 流水线
-│   │   │   ├── graph/            #    知识图谱
-│   │   │   ├── metrics/          #    指标语义层
-│   │   │   └── memory/           #    Agent 记忆
+│   │   │   ├── service.py        #    RAG 流水线编排 (含 M6 OTel 埋点)
+│   │   │   ├── vectorstore.py    #    可插拔向量后端 (M6: 余弦/pgvector/Milvus)
+│   │   │   ├── embeddings.py     #    可插拔 Embedding (Hash/OpenAI)
+│   │   │   ├── parsers.py        #    文档解析 (txt/md/html/pdf)
+│   │   │   ├── chunking.py       #    切分
+│   │   │   └── metrics_*.py      #    指标语义层
 │   │   ├── agents/               # ③ 多 Agent 协同层
-│   │   │   ├── registry/         #    Agent 注册
-│   │   │   ├── orchestration/    #    编排引擎
-│   │   │   ├── bus/              #    消息总线
-│   │   │   └── tools/            #    工具注册中心 (MCP)
+│   │   │   ├── orchestration.py  #    真并行 DAG 编排
+│   │   │   ├── mcp_server.py     #    完整 MCP Server (M5)
+│   │   │   ├── tools.py          #    工具注册中心
+│   │   │   ├── bus.py            #    事件总线 (Kafka 适配)
+│   │   │   └── templates.py      #    Agent 模板市场
 │   │   ├── security/             # ④ 安全治理层
-│   │   │   ├── iam/              #    认证授权
-│   │   │   ├── masking/          #    脱敏
-│   │   │   ├── audit/            #    审计
-│   │   │   └── lineage/          #    血缘
+│   │   │   ├── auth.py           #    JWT/RBAC (M6: tenant 声明)
+│   │   │   ├── sso.py            #    SSO/OAuth2.0 OIDC 客户端 (M6)
+│   │   │   ├── mock_idp.py       #    内置演示 IdP (M6)
+│   │   │   ├── tenant.py         #    多租户实体 (M6)
+│   │   │   ├── masking.py        #    动态脱敏
+│   │   │   ├── acl.py            #    列级权限
+│   │   │   ├── audit.py          #    审计日志
+│   │   │   ├── lineage.py        #    数据血缘
+│   │   │   └── retention.py      #    生命周期
 │   │   ├── feedback/             # ⑤ 效果反馈层
-│   │   │   ├── metrics/          #    指标监控
-│   │   │   ├── evaluation/       #    质量评估
-│   │   │   ├── capture/          #    反馈采集
-│   │   │   └── iterate/          #    迭代闭环
-│   │   ├── core/                 # 基础设施 (配置/日志/DB/缓存/异常)
-│   │   └── main.py               # 应用入口
-│   ├── tests/
-│   └── pyproject.toml
-├── frontend/                     # Astryx 前端
-│   ├── src/
-│   │   ├── pages/                # 五大工作台页面
-│   │   ├── components/           # 通用组件
-│   │   ├── stores/               # Zustand
-│   │   ├── services/             # API 客户端
-│   │   └── theme/                # Astryx 主题定制
-│   └── package.json
+│   │   │   ├── metrics.py        #    运行指标中间件
+│   │   │   └── feedback.py       #    任务反馈闭环
+│   │   ├── core/                 # 基础设施
+│   │   │   ├── config.py         #    全局配置 (env/.env)
+│   │   │   ├── database.py       #    异步引擎 + 轻量迁移
+│   │   │   ├── telemetry.py      #    OTLP span (M6)
+│   │   │   ├── logging.py / exceptions.py
+│   │   └── main.py               # 应用入口 (挂载 MCP + 演示 IdP)
+│   ├── tests/                    # 44 项测试 (test_access/agents/knowledge/m3/m4/m5/m6/m6_tenancy)
+│   └── scripts/seed_demo.py      # 演示数据
+├── frontend/                     # Astryx 前端 (9 个页面)
+│   └── src/
+│       ├── pages/                # Dashboard/Sources/Catalog/Knowledge/Metrics/Agents/Security/Observability/Login
+│       ├── api/                  # REST 客户端 + 类型定义
+│       ├── components/ / store/ / theme.tsx
 └── deploy/
-    ├── docker-compose.yml        # 本地一键起
-    └── k8s/                      # 生产部署
+    └── docker-compose.yml        # 本地一键起 (postgres + backend + frontend)
 ```
 
 ---
@@ -381,11 +365,13 @@ BudaiAgentMesh/
 
 | 阶段 | 里程碑 | 范围 | 状态 |
 | --- | --- | --- | --- |
-| M1 (MVP) | 数据接入 + 目录 + 权限 + 基础观测 | 常用连接器、元数据目录、RBAC、REST API | ✅ 已完成 |
-| M2 | 知识沉淀 + Agent 协同 | RAG 流水线、指标语义层、编排引擎、MCP 工具雏形 | ✅ 已完成 |
+| M1 (MVP) | 数据接入 + 目录 + 权限 + 基础观测 | 连接器 (PG/MySQL/CSV)、元数据目录、RBAC、REST API | ✅ 已完成 |
+| M2 | 知识沉淀 + Agent 协同 | RAG 流水线、指标语义层、Agent 注册、工具注册中心、任务编排 | ✅ 已完成 |
 | M3 | 治理增强 + 反馈闭环 | 动态脱敏、审计日志、数据血缘、任务反馈 | ✅ 已完成 |
 | M4 | 编排并行化 + 事件总线 + 模板市场 | 真并行 DAG、EventBus (Kafka 适配)、Agent 模板 | ✅ 已完成 |
-| M5 | 规模化 + 开放生态 | 多租户、联邦接入、完整 MCP Server、pgvector/Milvus、SSO/ABAC、CDC 增量、OTel Trace | 规划中 |
+| M5 | 开放生态 + 精细治理 | 完整 MCP Server、列级权限、生命周期 | ✅ 已完成 |
+| M6 | 规模化 + 可观测 (当前) | 多租户、联邦接入、CDC 增量、SSO/OAuth2.0、pgvector/Milvus、OTel | ✅ 已完成 (2026-08) |
+| M7 | 深度规模化 | 租户覆盖知识/Agent 层、逻辑复制 CDC、Prometheus 指标、联邦双向认证 | 🚧 规划中 |
 
 ---
 

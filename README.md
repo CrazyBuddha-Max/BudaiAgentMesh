@@ -22,26 +22,29 @@
 | ⚡   | MCP Server  | 完整 Model Context Protocol 端点 (/mcp/mcp), 4 个数据工具      | 已实现 (M5)                 |
 
 
-## 当前进度 (2025-08)
+## 当前进度 (2026-08)
 
 
 | 指标         | 数值                                  |
 | ---------- | ----------------------------------- |
-| 后端 API 端点  | 50+ 个                               |
-| 数据模型表      | 14 张 (含列权限规则)                       |
+| 后端 API 端点  | 47 条路径 / 70+ 操作                        |
+| 数据模型表      | 16 张 (含租户/联邦对等实例)                   |
 | 前端页面       | 9 个                                 |
-| 自动化测试      | 42 项, 全部通过 (M6 新增多租户/联邦 5 项)  |
+| 自动化测试      | 44 项, 全部通过 (M6 新增向量后端/增量/SSO/多租户/联邦/上传 20 项)  |
 | MCP Server | /mcp/mcp (streamable-http), 4 个数据工具 |
-| 代码质量       | ruff 全绿                             |
+| 代码质量       | ruff 全绿, 前端 tsc+vite build 通过             |
 
 
 ### 分层实现明细
 
 **① 数据统一接入层** (app/access)
 
-- 连接器市场: PostgreSQL / MySQL / CSV, 统一 `SourceContract` 契约 (发现/采样/聚合/鉴权参数)
+- 连接器市场: PostgreSQL / MySQL / CSV, 统一 `SourceContract` 契约 (发现/采样/聚合/增量检测)
 - 采集引擎: Schema 自动发现 + 质量初检 (空值率/区分度/采样值) + 采集任务留痕
+- **增量采集 (M6)**: CSV 文件指纹 (mtime+size) / PostgreSQL / MySQL 表指纹 (行数+列集合), 水位线持久化, 无变化跳过重采
+- **CSV 上传接入 (M6)**: 浏览器选文件 multipart 上传落盘, 免填路径
 - 元数据目录: 数据源 CRUD / 表列检索 / 目录统计 / 数据样例查询
+- **联邦接入 (M6)**: 注册远端对等实例, 目录/数据 Bearer 透传, 并发检索全部启用实例
 
 **② 知识沉淀层** (app/knowledge)
 
@@ -60,6 +63,8 @@
 **④ 安全治理层** (app/security)
 
 - JWT 签发校验 + 内置账号 RBAC 三级角色 (viewer/analyst/admin)
+- **SSO / OAuth2.0 (M6)**: 通用 OIDC 授权码流 (兼容飞书/GitHub/GitLab/Keycloak), 内置演示 IdP (/mock-idp) 免外部账号端到端演示
+- **多租户 (M6)**: 数据接入层按 tenant 硬隔离 (越权视为不存在), JWT 携带租户声明, 账号格式 username:password:role:tenant
 - 动态脱敏 (M3): 敏感列自动识别 (手机/身份证/银行卡/邮箱/姓名/地址) + 按角色掩码
 - 细粒度列级权限 (M5): 按角色禁止访问指定列, 与脱敏叠加 (数据采样/指标维度双拦截)
 - 审计日志 (M3): 全链路操作留痕, 独立会话写入不阻断业务
@@ -71,6 +76,7 @@
 
 - 运行指标: 请求量 / 平均时延 / P95 / 错误率 / 状态码分布 (滑动窗口)
 - 反馈闭环 (M3): Agent 任务评分 (1-5 星) + 评论, 与任务/Trace 绑定可回溯, 评分统计驱动迭代
+- **OTel 遥测 (M6)**: OTLP/HTTP span 上报 (采集/入库), 零额外依赖, 未配置零开销
 
 ## 技术栈
 
@@ -137,22 +143,38 @@ docker compose up -d --build
   - [x] 动态脱敏 / 审计日志 / 数据血缘 / 任务反馈闭环
 - [x] **M4**: 编排并行化 + 事件总线 + Agent 模板市场
   - [x] 真并行 DAG / 事件总线 (Kafka 适配) / Agent 模板市场
-- [x] **M5**: MCP Server + 细粒度权限 + 生命周期 (当前)
+- [x] **M5**: MCP Server + 细粒度权限 + 生命周期
   - [x] 完整 MCP Server (/mcp/mcp, 4 工具, 任意 MCP 客户端可调用)
   - [x] 列级权限: 按角色禁止列访问, 数据/指标双拦截
   - [x] 数据生命周期: 保留期策略 + 状态评估
-- [x] **M6**: 多租户 + 联邦接入 + CDC 增量 + SSO/OAuth2.0 + pgvector/Milvus + OTel
+- [x] **M6**: 多租户 + 联邦接入 + CDC 增量 + SSO/OAuth2.0 + pgvector/Milvus + OTel (当前)
   - [x] 可插拔向量后端 (M6-1): pgvector (`<=>` 余弦距离) / Milvus 适配, 接口保持业务无感
   - [x] SSO / OAuth2.0 登录 (M6-2): 通用 OIDC 授权码流 + 内置演示 IdP + 前端一键登录
   - [x] OTel 观测 (M6-3): OTLP/HTTP span 上报 (采集/入库/Agent 任务), 零额外依赖, 未配置零开销
   - [x] CDC 增量采集 (M6-4): CSV 文件指纹 / PostgreSQL / MySQL 表指纹水位线, 无变化跳过重采
   - [x] 多租户 (M6-5): 数据接入层按 tenant 硬隔离, JWT 携带租户声明, 账号格式扩展 username:password:role:tenant
   - [x] 联邦接入 (M6-6): 实例间目录/数据透传 (Bearer 令牌), 并发检索全部启用对等实例
+  - [x] CSV 浏览器上传 (M6-7): multipart 上传落盘免填路径
+- [ ] **M7** (规划): 租户扩展到知识/Agent 层 · 真实 PostgreSQL 逻辑复制 CDC · Prometheus 指标暴露 · 多租户配额/密钥隔离 · 联邦双向认证
 
 ## 测试
 
 ```bash
 cd backend
-../.venv/bin/python -m pytest tests/ -q    # 37 项核心测试
+../.venv/bin/python -m pytest tests/ -q    # 44 项核心测试
 ```
+
+## 关键配置 (见 backend/.env.example)
+
+| 配置 | 作用 | 不配置时 |
+| --- | --- | --- |
+| `DATABASE_URL` | PostgreSQL 元数据库 | 本地 SQLite |
+| `VECTOR_BACKEND` | auto / brute_force / pgvector / milvus | auto (SQLite 用余弦) |
+| `MILVUS_URI` | Milvus 地址 | 不启用 Milvus |
+| `OPENAI_API_KEY` | 高质量向量化 | 本地 HashEmbedder |
+| `KAFKA_BROKERS` | 事件总线切 Kafka | 进程内总线 |
+| `OTEL_ENDPOINT` | OTLP span 上报 | 零开销不上报 |
+| `SSO_ENABLED` 等 `SSO_*` | SSO/OAuth2.0 登录 | 仅内置账号登录 |
+| `BUILTIN_USERS` | 内置账号, 可含第 4 段租户 | 默认 3 个演示账号 |
+| `JWT_SECRET` / `SECRET_KEY` | 生产必改 | 默认演示密钥 |
 
