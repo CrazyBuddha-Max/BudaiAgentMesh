@@ -19,9 +19,9 @@ const NAV_ITEMS = [
   {path: '/catalog', label: '元数据目录', icon: <FolderSearch size={17} />},
   {path: '/knowledge', label: '知识工作台', icon: <BookOpen size={17} />},
   {path: '/metrics', label: '指标语义', icon: <Calculator size={17} />},
+  {path: '/models', label: '大模型接入', icon: <BrainCircuit size={17} />},
   {path: '/agents', label: 'Agent 协同', icon: <Bot size={17} />},
   {path: '/tasks', label: '问答工作台', icon: <MessageSquareText size={17} />},
-  {path: '/models', label: '大模型接入', icon: <BrainCircuit size={17} />},
   {path: '/security', label: '安全治理', icon: <Shield size={17} />},
   {path: '/observability', label: '运行观测', icon: <Activity size={17} />},
 ];
