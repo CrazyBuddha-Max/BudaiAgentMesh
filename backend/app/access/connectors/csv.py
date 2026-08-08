@@ -62,6 +62,17 @@ class CsvConnector(SourceContract):
                 rows.append(dict(row))
         return rows
 
+    async def detect_changes(self, previous_watermark: str | None) -> dict:
+        """增量检测 (M6): 以文件指纹 (mtime + size) 判断是否变更."""
+        await self.test_connection()
+        st = os.stat(self.path)
+        fingerprint = f"{st.st_mtime_ns}:{st.st_size}"
+        changed = previous_watermark != fingerprint
+        return {
+            "changed": changed,
+            "watermark": fingerprint,
+            "detail": "文件已变更, 重新采集" if changed else "文件无变化, 增量跳过",
+        }
 
     async def discover_schema(self) -> list[TableProfile]:
         await self.test_connection()

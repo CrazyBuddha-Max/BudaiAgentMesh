@@ -1,5 +1,5 @@
-import {useState} from 'react';
-import {useNavigate} from 'react-router';
+import {useEffect, useState} from 'react';
+import {useNavigate, useSearchParams} from 'react-router';
 import {Card} from '@astryxdesign/core/Card';
 import {VStack} from '@astryxdesign/core/VStack';
 import {HStack} from '@astryxdesign/core/HStack';
@@ -11,15 +11,47 @@ import {Divider} from '@astryxdesign/core/Divider';
 import {useToast} from '@astryxdesign/core/Toast';
 import {api} from '@/api/client';
 import {useAuthStore} from '@/store/auth';
-import {Database} from 'lucide-react';
+import {Database, LogIn} from 'lucide-react';
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const toast = useToast();
   const setAuth = useAuthStore((s) => s.setAuth);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [sso, setSso] = useState<{enabled: boolean; name: string; authorize_url: string | null}>({
+    enabled: false,
+    name: 'SSO',
+    authorize_url: null,
+  });
+
+  // 探测 SSO 配置 (M6)
+  useEffect(() => {
+    api
+      .ssoConfig()
+      .then(setSso)
+      .catch(() => {});
+  }, []);
+
+  // SSO 回跳: /login?code=xxx&state=xxx
+  useEffect(() => {
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    if (!code || !state) return;
+    setLoading(true);
+    api
+      .ssoCallback(code, state)
+      .then((resp) => {
+        setAuth(resp.access_token, resp.user);
+        navigate('/dashboard', {replace: true});
+      })
+      .catch((err: Error) => {
+        toast({body: err.message || 'SSO 登录失败', type: 'error'});
+      })
+      .finally(() => setLoading(false));
+  }, [searchParams, navigate, setAuth, toast]);
 
   const submit = async () => {
     if (!username || !password) {
@@ -82,6 +114,21 @@ export function LoginPage() {
               isLoading={loading}
               onClick={() => void submit()}
             />
+
+            {sso.enabled && sso.authorize_url && (
+              <>
+                <Divider />
+                <Button
+                  label={`使用 ${sso.name} 登录`}
+                  variant="secondary"
+                  width="full"
+                  icon={<LogIn size={15} />}
+                  onClick={() => {
+                    window.location.href = sso.authorize_url!;
+                  }}
+                />
+              </>
+            )}
 
             <VStack gap={1}>
               <Text type="supporting">

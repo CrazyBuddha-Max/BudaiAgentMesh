@@ -50,6 +50,13 @@ class SourceContract(ABC):
     async def sample_rows(self, table_name: str, limit: int = 10) -> list[dict]:
         """读取表数据样例 (供 Agent 数据工具调用)."""
 
+    async def detect_changes(self, previous_watermark: str | None) -> dict:
+        """增量检测 (M6): 默认全量重采, 支持指纹的连接器 (如 CSV) 覆盖实现.
+
+        返回 {"changed": bool, "watermark": str|None, "detail": str}.
+        """
+        return {"changed": True, "watermark": None, "detail": "全量采集"}
+
     async def query_aggregate(
         self,
         table: str,

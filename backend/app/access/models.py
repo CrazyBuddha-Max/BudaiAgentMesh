@@ -28,6 +28,7 @@ class DataSource(Base):
     password_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 生命周期保留期 (M5)
+    watermark: Mapped[str | None] = mapped_column(String(256), nullable=True)  # 增量采集水位线 (M6)
 
     status: Mapped[str] = mapped_column(String(16), default="pending")  # pending/active/error
     quality_score: Mapped[float] = mapped_column(default=0.0)

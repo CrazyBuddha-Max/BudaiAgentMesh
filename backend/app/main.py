@@ -60,3 +60,8 @@ app.include_router(api_router, prefix=settings.api_prefix)
 
 if mcp_app is not None:
     app.mount("/mcp", mcp_app)
+
+# M6: 内置演示 IdP (仅本地演示; 生产接真实 OIDC 提供方)
+from app.security import mock_idp  # noqa: E402  (挂载需在 app 定义后)
+
+app.mount("/mock-idp", mock_idp.app)

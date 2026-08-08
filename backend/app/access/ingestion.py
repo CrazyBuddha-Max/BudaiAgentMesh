@@ -28,37 +28,55 @@ async def test_source(session: AsyncSession, source_id: int) -> str:
 
 
 async def ingest_source(session: AsyncSession, source_id: int) -> models.IngestionRun:
-    """执行一次采集: Schema 注册 + 质量初检 + 目录落库."""
+    """执行一次采集: 增量检测 -> Schema 注册 + 质量初检 + 目录落库."""
     source = await get_source(session, source_id)
     run = models.IngestionRun(source_id=source_id, status="running")
     session.add(run)
     await session.commit()
     await session.refresh(run)
 
-    try:
-        connector = registry.build(source.source_type, source_params(source))
-        await connector.test_connection()
-        profiles: list[TableProfile] = await connector.discover_schema()
-        await connector.close()
+    from app.core.telemetry import span
 
-        await _sync_catalog(session, source, profiles)
-        table_count = len(profiles)
-        source.status = "active"
-        source.last_ingested_at = dt.datetime.now(dt.UTC)
-        source.quality_score = _overall_quality(profiles)
-        run.status = "success"
-        run.tables_found = table_count
-        run.message = f"发现 {table_count} 张表"
-        run.finished_at = dt.datetime.now(dt.UTC)
-        await session.commit()
-    except Exception as exc:
-        logger.exception("采集失败 source_id=%s", source_id)
-        source.status = "error"
-        run.status = "failed"
-        run.message = str(exc)
-        run.finished_at = dt.datetime.now(dt.UTC)
-        await session.commit()
-        raise
+    async with span("ingest.source", source_id=source_id, source_type=source.source_type):
+        try:
+            connector = registry.build(source.source_type, source_params(source))
+            await connector.test_connection()
+
+            # 增量检测 (M6): 无变化则跳过重采, 保留目录现状
+            change = await connector.detect_changes(source.watermark)
+            if not change["changed"]:
+                await connector.close()
+                source.status = "active"
+                source.last_ingested_at = dt.datetime.now(dt.UTC)
+                run.status = "success"
+                run.tables_found = 0
+                run.message = change.get("detail", "无变化, 增量跳过")
+                run.finished_at = dt.datetime.now(dt.UTC)
+                await session.commit()
+                return run
+
+            profiles: list[TableProfile] = await connector.discover_schema()
+            await connector.close()
+
+            await _sync_catalog(session, source, profiles)
+            table_count = len(profiles)
+            source.status = "active"
+            source.last_ingested_at = dt.datetime.now(dt.UTC)
+            source.quality_score = _overall_quality(profiles)
+            source.watermark = change.get("watermark")
+            run.status = "success"
+            run.tables_found = table_count
+            run.message = f"发现 {table_count} 张表 ({change.get('detail', '全量')})"
+            run.finished_at = dt.datetime.now(dt.UTC)
+            await session.commit()
+        except Exception as exc:
+            logger.exception("采集失败 source_id=%s", source_id)
+            source.status = "error"
+            run.status = "failed"
+            run.message = str(exc)
+            run.finished_at = dt.datetime.now(dt.UTC)
+            await session.commit()
+            raise
     return run
 
 

@@ -80,6 +80,9 @@ export const api = {
   // 认证
   login: (username: string, password: string) =>
     request<LoginResponse>('/security/login', {method: 'POST', body: JSON.stringify({username, password})}),
+  ssoConfig: () => request<{enabled: boolean; name: string; authorize_url: string | null}>('/security/sso/config'),
+  ssoCallback: (code: string, state: string) =>
+    request<LoginResponse>(`/security/sso/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`),
   me: () => request<CurrentUser>('/security/me'),
 
   // 数据源

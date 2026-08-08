@@ -38,6 +38,23 @@ class Settings(BaseSettings):
     # M6: Milvus 连接地址, 例如 http://localhost:19530 或本地文件 ./data/budai_milvus.db
     milvus_uri: str = ""
 
+    # M6: 观测遥测 (OTLP/HTTP), 配置端点后启用 (如 http://localhost:4318)
+    otel_endpoint: str = ""
+    otel_service_name: str = "budai-agent-mesh"
+
+    # M6: SSO / OAuth2.0 授权码登录 (兼容任意标准 OIDC 提供方)
+    sso_enabled: bool = False
+    sso_provider_name: str = "SSO"
+    sso_client_id: str = ""
+    sso_client_secret: str = ""
+    sso_authorize_url: str = ""
+    sso_token_url: str = ""
+    sso_userinfo_url: str = ""
+    sso_scope: str = "openid profile email"
+    sso_role_claim: str = "role"  # userinfo 中承载角色的字段名
+    sso_default_role: str = "viewer"
+    sso_redirect_uri: str = "http://localhost:5173/login"  # 前端回调页 (须与 IdP 白名单一致)
+
 
 @lru_cache
 def get_settings() -> Settings:

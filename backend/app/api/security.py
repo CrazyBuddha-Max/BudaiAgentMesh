@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_session
+from app.core.exceptions import AuthError
 from app.security.audit import list_audit_logs
 from app.security.auth import (
     AdminDep,
@@ -44,6 +45,37 @@ async def login(payload: LoginRequest, session: AsyncSession = SessionDep) -> Lo
 @router.get("/me", response_model=CurrentUser)
 async def me(user: CurrentUserDep) -> CurrentUser:
     return user
+
+
+# ---------- SSO / OAuth2.0 (M6) ----------
+
+@router.get("/sso/config")
+async def sso_config() -> dict:
+    """SSO 登录配置: 前端据此渲染登录按钮并跳转授权页."""
+    from app.security.sso import SSO_PROVIDER
+
+    if not SSO_PROVIDER.enabled:
+        return {"enabled": False, "name": SSO_PROVIDER.config["provider_name"], "authorize_url": None}
+    return {
+        "enabled": True,
+        "name": SSO_PROVIDER.config["provider_name"],
+        "authorize_url": SSO_PROVIDER.build_authorize_url(),
+    }
+
+
+@router.get("/sso/callback", response_model=LoginResponse)
+async def sso_callback(code: str, state: str, session: AsyncSession = SessionDep) -> LoginResponse:
+    """OAuth2 回调: 校验 state -> 换码 -> 取用户 -> 签发本地 JWT."""
+    from app.security.audit import record_audit
+    from app.security.sso import SSO_PROVIDER
+
+    if not SSO_PROVIDER.enabled:
+        raise AuthError("SSO 未启用")
+    if not SSO_PROVIDER.validate_state(state):
+        raise AuthError("state 校验失败, 请重新发起 SSO 登录")
+    user = await SSO_PROVIDER.exchange_code(code)
+    await record_audit(user.username, "auth.sso_login", "user", user.username)
+    return LoginResponse(access_token=create_token(user), user=user)
 
 
 # ---------- 审计 ----------

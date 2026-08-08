@@ -30,7 +30,7 @@
 | 后端 API 端点  | 50+ 个                               |
 | 数据模型表      | 14 张 (含列权限规则)                       |
 | 前端页面       | 9 个                                 |
-| 自动化测试      | 24 项, 全部通过 (M5 新增列权限/生命周期/MCP 3 项)  |
+| 自动化测试      | 37 项, 全部通过 (M6 新增向量后端/增量采集/SSO 13 项)  |
 | MCP Server | /mcp/mcp (streamable-http), 4 个数据工具 |
 | 代码质量       | ruff 全绿                             |
 
@@ -124,6 +124,7 @@ docker compose up -d --build
 ## 文档
 
 - [系统整体架构设计](docs/ARCHITECTURE.md)
+- [15 分钟上手教程](docs/USER_GUIDE.md)
 - [后端接口] 启动后访问 [http://localhost:8000/docs](http://localhost:8000/docs) (OpenAPI)
 - [前端说明](frontend/README.md)
 
@@ -140,13 +141,16 @@ docker compose up -d --build
   - [x] 完整 MCP Server (/mcp/mcp, 4 工具, 任意 MCP 客户端可调用)
   - [x] 列级权限: 按角色禁止列访问, 数据/指标双拦截
   - [x] 数据生命周期: 保留期策略 + 状态评估
-- [ ] **M6**: 多租户 + 联邦接入 + SSO/OAuth2.0 + CDC 增量 + OTel
+- [ ] **M6**: 多租户 + 联邦接入 + CDC 增量 (数据库级) + 多租户隔离
   - [x] 可插拔向量后端 (M6-1): pgvector (`<=>` 余弦距离) / Milvus 适配, 接口保持业务无感
+  - [x] SSO / OAuth2.0 登录 (M6-2): 通用 OIDC 授权码流 + 内置演示 IdP + 前端一键登录
+  - [x] OTel 观测 (M6-3): OTLP/HTTP span 上报 (采集/入库/Agent 任务), 零额外依赖, 未配置零开销
+  - [x] CDC 增量采集 (M6-4): 文件指纹水位线, 无变化跳过重采 (PostgreSQL/MySQL 级 CDC 待 M6+)
 
 ## 测试
 
 ```bash
 cd backend
-../.venv/bin/python -m pytest tests/ -q    # 24 项核心测试
+../.venv/bin/python -m pytest tests/ -q    # 37 项核心测试
 ```
 

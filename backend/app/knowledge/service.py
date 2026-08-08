@@ -36,25 +36,28 @@ async def ingest_document(
     await session.refresh(doc)
 
     try:
-        text = extract_text(file_name, raw)
-        chunks = chunk_text(text)
-        embedder = embedder or get_embedder()
-        vectors = embedder.embed_batch(chunks)
+        from app.core.telemetry import span
 
-        for index, (content, vec) in enumerate(zip(chunks, vectors)):
-            session.add(
-                KnowledgeChunk(
-                    doc_id=doc.id,
-                    chunk_index=index,
-                    content=content,
-                    token_count=count_tokens(content),
-                    embedding=vec,
-                    meta={"source": file_name, "chunk": index},
+        async with span("knowledge.ingest", doc_id=doc.id, file=file_name):
+            text = extract_text(file_name, raw)
+            chunks = chunk_text(text)
+            embedder = embedder or get_embedder()
+            vectors = embedder.embed_batch(chunks)
+
+            for index, (content, vec) in enumerate(zip(chunks, vectors)):
+                session.add(
+                    KnowledgeChunk(
+                        doc_id=doc.id,
+                        chunk_index=index,
+                        content=content,
+                        token_count=count_tokens(content),
+                        embedding=vec,
+                        meta={"source": file_name, "chunk": index},
+                    )
                 )
-            )
-        doc.chunk_count = len(chunks)
-        doc.status = "ready"
-        await session.commit()
+            doc.chunk_count = len(chunks)
+            doc.status = "ready"
+            await session.commit()
     except Exception as exc:
         logger.exception("知识文档入库失败: %s", file_name)
         doc.status = "failed"

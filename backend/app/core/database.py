@@ -43,7 +43,10 @@ async def init_db() -> None:
 
 # 开发环境轻量迁移: 为存量库补齐新版本新增的列 (幂等, 生产环境用 Alembic)
 _ADD_COLUMNS: dict[str, list[tuple[str, str]]] = {
-    "data_sources": [("retention_days", "INTEGER")],  # M5 生命周期
+    "data_sources": [
+        ("retention_days", "INTEGER"),  # M5 生命周期
+        ("watermark", "VARCHAR(256)"),  # M6 增量采集水位线
+    ],
     "agent_tasks": [("collaborators", "JSON")],  # M4 协作 Agent
 }
 
