@@ -40,6 +40,7 @@ export function TasksPage() {
   const [activeId, setActiveId] = useState<number | null>(null);
   const [mainAgentId, setMainAgentId] = useState('');
   const [collaborators, setCollaborators] = useState<string[]>([]);
+  const [autoCollab, setAutoCollab] = useState(false);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [showChain, setShowChain] = useState(false);
@@ -51,6 +52,34 @@ export function TasksPage() {
   const agentNameOf = (id: number) => agents.data?.find((a) => a.id === id)?.name ?? `Agent#${id}`;
   const activeTask = tasks.data?.find((t) => t.id === activeId) ?? null;
   const running = tasks.data?.find((t) => t.status === 'running');
+
+  // 智能推荐协作 Agent (M7): 按目标关键词匹配能力, 自动选 1 个 (排除主控)
+  const recommendCollaborator = (): string => {
+    const list = agents.data ?? [];
+    const main = Number(mainAgentId);
+    const others = list.filter((a) => a.id !== main);
+    if (others.length === 0) return '';
+    const q = input;
+    const needKnowledge = /知识|口径|说明|定义|规范|文档/.test(q);
+    const needData = /数据|分析|订单|销售|金额|统计|毛利|库存|客户/.test(q);
+    const score = (a: {capabilities: string[]}): number => {
+      const caps = a.capabilities ?? [];
+      let s = 0;
+      if (needKnowledge && caps.includes('knowledge_retrieval')) s += 2;
+      if (needData && caps.includes('data_access')) s += 2;
+      if (caps.includes('report_draft')) s += 0.5;
+      return s;
+    };
+    const ranked = [...others].sort((a, b) => score(b) - score(a));
+    return score(ranked[0]) > 0 ? String(ranked[0].id) : '';
+  };
+
+  // 输入变化时自动推荐 (仅当用户未手动指定过)
+  useEffect(() => {
+    if (autoCollab || !input.trim() || !mainAgentId) return;
+    const rec = recommendCollaborator();
+    if (rec) setCollaborators([rec]);
+  }, [input, mainAgentId, agents.data]);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -148,12 +177,34 @@ export function TasksPage() {
               onChange={(v) => setMainAgentId(v)}
               options={(agents.data ?? []).map((a) => ({label: a.name, value: String(a.id)}))}
             />
-            <Selector
-              label="协作 (可选)"
-              value={collaborators[0] ?? ''}
-              onChange={(v) => setCollaborators(v ? [v] : [])}
-              options={(agents.data ?? []).map((a) => ({label: a.name, value: String(a.id)}))}
-            />
+            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+              <Selector
+                label="协作 Agent"
+                value={collaborators[0] ?? ''}
+                onChange={(v) => {
+                  setAutoCollab(true);
+                  setCollaborators(v ? [v] : []);
+                }}
+                options={(agents.data ?? [])
+                  .filter((a) => String(a.id) !== mainAgentId)
+                  .map((a) => ({label: a.name, value: String(a.id)}))}
+              />
+              {!autoCollab && collaborators[0] && (
+                <Badge label={`✨ 智能推荐`} variant="success" />
+              )}
+              {autoCollab && (
+                <Button
+                  label="恢复智能推荐"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setAutoCollab(false);
+                    const rec = recommendCollaborator();
+                    setCollaborators(rec ? [rec] : []);
+                  }}
+                />
+              )}
+            </div>
             {activeTask && (
               <Button
                 label={showChain ? '收起链路' : '执行链路'}
