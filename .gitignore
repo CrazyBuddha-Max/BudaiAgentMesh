@@ -12,6 +12,9 @@ backend/data/*.db-shm
 backend/data/*.db-wal
 backend/data/uploads/
 
+# 运行日志 (start_mac.sh 等启动脚本产生)
+*.log
+
 # Node
 node_modules/
 dist/
